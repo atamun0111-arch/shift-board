@@ -216,7 +216,7 @@ export default function Home() {
     setLoggingIn(false);
 
     if (error) {
-      setLoginError("メールアドレスまたはパスワードが違います。");
+      setLoginError(error.message || "ログインに失敗しました。");
     }
   }
 
