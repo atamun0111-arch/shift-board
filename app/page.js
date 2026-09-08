@@ -86,6 +86,7 @@ const initialEvents = [
         time: "10:00",
         required: 5,
         assigned: ["s1"],
+        stasen: 0,
       },
 
       {
@@ -93,7 +94,8 @@ const initialEvents = [
         section: "案内",
         time: "12:00",
         required: 3,
-        assigned: ["s1", "s2"],
+        assigned: ["s2"],
+        stasen: 0,
       },
     ],
   },
@@ -120,6 +122,22 @@ function storageRead(key, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeEvents(events) {
+  return events.map((event) => ({
+    ...event,
+
+    slots: (event.slots || []).map((slot) => ({
+      ...slot,
+
+      assigned:
+        slot.assigned || [],
+
+      stasen:
+        Number(slot.stasen) || 0,
+    })),
+  }));
 }
 
 function availabilityLabel(shift) {
@@ -241,29 +259,31 @@ export default function Home() {
   useEffect(() => {
     setStaff(
       storageRead(
-        "sb_staff_v5",
+        "sb_staff_v6",
         initialStaff
       )
     );
 
     setAdmins(
       storageRead(
-        "sb_admins_v5",
+        "sb_admins_v6",
         initialAdmins
       )
     );
 
     setShifts(
       storageRead(
-        "sb_shifts_v5",
+        "sb_shifts_v6",
         initialShifts
       )
     );
 
     setEvents(
-      storageRead(
-        "sb_events_v5",
-        initialEvents
+      normalizeEvents(
+        storageRead(
+          "sb_events_v6",
+          initialEvents
+        )
       )
     );
 
@@ -274,7 +294,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_staff_v5",
+      "sb_staff_v6",
       JSON.stringify(staff)
     );
   }, [staff, hydrated]);
@@ -283,7 +303,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_admins_v5",
+      "sb_admins_v6",
       JSON.stringify(admins)
     );
   }, [admins, hydrated]);
@@ -292,7 +312,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_shifts_v5",
+      "sb_shifts_v6",
       JSON.stringify(shifts)
     );
   }, [shifts, hydrated]);
@@ -301,7 +321,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_events_v5",
+      "sb_events_v6",
       JSON.stringify(events)
     );
   }, [events, hydrated]);
@@ -371,10 +391,7 @@ export default function Home() {
 
   function addStaff() {
     if (!newStaff.name.trim()) {
-      alert(
-        "名前を入力してください"
-      );
-
+      alert("名前を入力してください");
       return;
     }
 
@@ -383,7 +400,9 @@ export default function Home() {
 
       {
         id: crypto.randomUUID(),
+
         ...newStaff,
+
         name:
           newStaff.name.trim(),
       },
@@ -548,6 +567,8 @@ export default function Home() {
                   required,
 
                   assigned: [],
+
+                  stasen: 0,
                 },
               ],
             }
@@ -657,48 +678,137 @@ export default function Home() {
     );
   }
 
+  function getStaffAssignmentOnDate(
+    staffId,
+    date
+  ) {
+    for (
+      const event of events
+    ) {
+      if (
+        event.date !== date
+      ) {
+        continue;
+      }
+
+      for (
+        const slot of
+          event.slots || []
+      ) {
+        if (
+          (
+            slot.assigned ||
+            []
+          ).includes(staffId)
+        ) {
+          return {
+            eventId:
+              event.id,
+
+            slotId:
+              slot.id,
+
+            eventName:
+              event.eventName,
+
+            section:
+              slot.section,
+
+            time:
+              slot.time,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
   function toggleAssignment(
     eventId,
     slotId,
     staffId
   ) {
+    const event =
+      events.find(
+        (item) =>
+          item.id === eventId
+      );
+
+    if (!event) return;
+
+    const slot =
+      event.slots.find(
+        (item) =>
+          item.id === slotId
+      );
+
+    if (!slot) return;
+
+    const alreadyHere =
+      slot.assigned.includes(
+        staffId
+      );
+
+    if (!alreadyHere) {
+      const otherAssignment =
+        getStaffAssignmentOnDate(
+          staffId,
+          event.date
+        );
+
+      if (
+        otherAssignment &&
+        !(
+          otherAssignment.eventId ===
+            eventId &&
+          otherAssignment.slotId ===
+            slotId
+        )
+      ) {
+        alert(
+          `このスタッフはすでに\n${otherAssignment.eventName} / ${otherAssignment.time} / ${otherAssignment.section}\nに配置されています。`
+        );
+
+        return;
+      }
+    }
+
     setEvents((prev) =>
-      prev.map((event) => {
+      prev.map((item) => {
         if (
-          event.id !== eventId
+          item.id !==
+          eventId
         ) {
-          return event;
+          return item;
         }
 
         return {
-          ...event,
+          ...item,
 
           slots:
-            event.slots.map(
-              (slot) => {
+            item.slots.map(
+              (itemSlot) => {
                 if (
-                  slot.id !== slotId
+                  itemSlot.id !==
+                  slotId
                 ) {
-                  return slot;
+                  return itemSlot;
                 }
 
-                const exists =
-                  slot.assigned.includes(
-                    staffId
-                  );
-
                 return {
-                  ...slot,
+                  ...itemSlot,
 
-                  assigned: exists
-                    ? slot.assigned.filter(
-                        (id) =>
-                          id !== staffId
-                      )
-                    : [
-                        ...slot.assigned,
-                        staffId,
-                      ],
+                  assigned:
+                    alreadyHere
+                      ? itemSlot.assigned.filter(
+                          (id) =>
+                            id !== staffId
+                        )
+                      : [
+                          ...itemSlot.assigned,
+                          staffId,
+                        ],
                 };
               }
             ),
@@ -714,16 +824,19 @@ export default function Home() {
       new Set();
 
     for (
-      const event of events.filter(
-        (event) =>
-          event.date === date
-      )
+      const event of
+        events.filter(
+          (event) =>
+            event.date === date
+        )
     ) {
       for (
-        const slot of event.slots
+        const slot of
+          event.slots
       ) {
         for (
-          const id of slot.assigned
+          const id of
+            slot.assigned
         ) {
           ids.add(id);
         }
@@ -747,6 +860,10 @@ export default function Home() {
           people:
             staff.filter(
               (person) =>
+                canWorkOnDate(
+                  person.id,
+                  date
+                ) &&
                 !assigned.has(
                   person.id
                 )
@@ -764,15 +881,18 @@ export default function Home() {
       <style jsx global>{`
 
         * {
-          box-sizing: border-box;
+          box-sizing:
+            border-box;
         }
 
         body {
           margin: 0;
 
-          background: #f5f6f8;
+          background:
+            #f5f6f8;
 
-          color: #1f2937;
+          color:
+            #1f2937;
 
           font-family:
             -apple-system,
@@ -793,7 +913,8 @@ export default function Home() {
         }
 
         .topbar {
-          background: #111827;
+          background:
+            #111827;
 
           color: white;
 
@@ -805,7 +926,8 @@ export default function Home() {
           justify-content:
             space-between;
 
-          align-items: center;
+          align-items:
+            center;
 
           gap: 12px;
         }
@@ -820,7 +942,8 @@ export default function Home() {
           margin:
             3px 0 0;
 
-          color: #9ca3af;
+          color:
+            #9ca3af;
 
           font-size: 11px;
         }
@@ -828,16 +951,19 @@ export default function Home() {
         .month {
           border: 0;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
           padding:
             9px 11px;
 
-          background: white;
+          background:
+            white;
         }
 
         .tabs {
-          position: sticky;
+          position:
+            sticky;
 
           top: 0;
 
@@ -852,33 +978,40 @@ export default function Home() {
           padding:
             10px 14px;
 
-          background: white;
+          background:
+            white;
 
           border-bottom:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
         }
 
         .tab {
           border: 0;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
-          background: #eef0f3;
+          background:
+            #eef0f3;
 
           padding:
             8px 12px;
 
-          font-weight: 700;
+          font-weight:
+            700;
         }
 
         .tab.active {
-          background: #111827;
+          background:
+            #111827;
 
           color: white;
         }
 
         .content {
-          max-width: 1900px;
+          max-width:
+            1900px;
 
           margin: auto;
 
@@ -886,16 +1019,20 @@ export default function Home() {
         }
 
         .card {
-          background: white;
+          background:
+            white;
 
           border:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
 
-          border-radius: 12px;
+          border-radius:
+            12px;
 
           padding: 15px;
 
-          margin-bottom: 14px;
+          margin-bottom:
+            14px;
         }
 
         h2,
@@ -904,39 +1041,48 @@ export default function Home() {
         }
 
         .muted {
-          color: #6b7280;
+          color:
+            #6b7280;
 
-          font-size: 11px;
+          font-size:
+            11px;
         }
 
         .primary {
           border: 0;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
-          background: #2563eb;
+          background:
+            #2563eb;
 
           color: white;
 
           padding:
             9px 13px;
 
-          font-weight: 700;
+          font-weight:
+            700;
         }
 
         .danger {
           border: 0;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
-          background: #fee2e2;
+          background:
+            #fee2e2;
 
-          color: #b91c1c;
+          color:
+            #b91c1c;
 
           padding:
             8px 11px;
 
-          font-weight: 700;
+          font-weight:
+            700;
         }
 
         .formRow {
@@ -946,71 +1092,91 @@ export default function Home() {
 
           gap: 8px;
 
-          align-items: center;
+          align-items:
+            center;
         }
 
         input,
         select {
           border:
-            1px solid #d1d5db;
+            1px solid
+            #d1d5db;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
           padding: 9px;
 
-          background: white;
+          background:
+            white;
         }
 
         .boardWrap {
           overflow: auto;
 
           height:
-            calc(100vh - 180px);
+            calc(
+              100vh -
+              180px
+            );
 
-          min-height: 500px;
+          min-height:
+            500px;
 
           border:
-            1px solid #dfe3e8;
+            1px solid
+            #dfe3e8;
 
-          border-radius: 10px;
+          border-radius:
+            10px;
 
-          background: white;
+          background:
+            white;
         }
 
         .shiftTable {
           border-collapse:
             separate;
 
-          border-spacing: 0;
+          border-spacing:
+            0;
 
-          width: max-content;
+          width:
+            max-content;
 
-          min-width: 100%;
+          min-width:
+            100%;
         }
 
         .shiftTable th,
         .shiftTable td {
           border-right:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
 
           border-bottom:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
 
           padding: 3px;
 
-          text-align: center;
+          text-align:
+            center;
 
-          vertical-align: middle;
+          vertical-align:
+            middle;
         }
 
         .shiftTable th {
-          position: sticky;
+          position:
+            sticky;
 
           top: 0;
 
           z-index: 8;
 
-          background: #f3f4f6;
+          background:
+            #f3f4f6;
         }
 
         .dateHead {
@@ -1022,26 +1188,30 @@ export default function Home() {
           z-index:
             15 !important;
 
-          width: 180px;
+          width: 190px;
 
-          min-width: 180px;
+          min-width:
+            190px;
 
           text-align:
             left !important;
         }
 
         .dateCell {
-          position: sticky;
+          position:
+            sticky;
 
           left: 0;
 
           z-index: 6;
 
-          width: 180px;
+          width: 190px;
 
-          min-width: 180px;
+          min-width:
+            190px;
 
-          background: white;
+          background:
+            white;
 
           text-align:
             left !important;
@@ -1060,31 +1230,54 @@ export default function Home() {
         }
 
         .availableCount {
-          font-size: 10px;
+          font-size:
+            10px;
 
-          color: #166534;
+          color:
+            #166534;
 
-          font-weight: 800;
+          font-weight:
+            800;
+        }
+
+        .requiredCount {
+          margin-top:
+            2px;
+
+          color:
+            #b45309;
+
+          font-size:
+            10px;
+
+          font-weight:
+            800;
         }
 
         .eventMini {
-          margin-top: 4px;
+          margin-top:
+            4px;
 
           padding: 4px;
 
-          border-radius: 5px;
+          border-radius:
+            5px;
 
-          background: #eff6ff;
+          background:
+            #eff6ff;
 
-          font-size: 9px;
+          font-size:
+            9px;
         }
 
         .personHead {
-          width: 80px;
+          width: 78px;
 
-          min-width: 80px;
+          min-width:
+            78px;
 
-          max-width: 80px;
+          max-width:
+            78px;
 
           padding:
             5px 2px !important;
@@ -1094,94 +1287,120 @@ export default function Home() {
           display:
             -webkit-box;
 
-          -webkit-line-clamp: 2;
+          -webkit-line-clamp:
+            2;
 
           -webkit-box-orient:
             vertical;
 
-          overflow: hidden;
+          overflow:
+            hidden;
 
-          font-size: 10px;
+          font-size:
+            10px;
 
-          line-height: 1.2;
+          line-height:
+            1.2;
 
-          word-break: break-all;
+          word-break:
+            break-all;
         }
 
         .personMeta {
-          margin-top: 2px;
+          margin-top:
+            2px;
 
-          font-size: 8px;
+          font-size:
+            8px;
 
-          color: #6b7280;
+          color:
+            #6b7280;
         }
 
         .shiftCell {
-          width: 80px;
+          width: 78px;
 
-          min-width: 80px;
+          min-width:
+            78px;
 
-          max-width: 80px;
+          max-width:
+            78px;
         }
 
         .cellButton {
           width: 100%;
 
-          min-height: 36px;
+          min-height:
+            36px;
 
           border: 0;
 
-          border-radius: 6px;
+          border-radius:
+            6px;
 
-          font-weight: 800;
+          font-weight:
+            800;
 
-          font-size: 13px;
-
-          position: relative;
+          font-size:
+            13px;
         }
 
         .statusAll {
-          background: #dcfce7;
+          background:
+            #dcfce7;
         }
 
         .statusTime {
-          background: #dbeafe;
+          background:
+            #dbeafe;
         }
 
         .statusUndecided {
-          background: #fef3c7;
+          background:
+            #fef3c7;
         }
 
         .statusOff {
-          background: #fee2e2;
+          background:
+            #fee2e2;
         }
 
         .statusNone {
-          background: #f3f4f6;
+          background:
+            #f3f4f6;
 
-          color: #6b7280;
+          color:
+            #6b7280;
         }
 
         .negotiatedMark {
           display: block;
 
-          margin-top: 1px;
+          margin-top:
+            1px;
 
-          font-size: 7px;
+          font-size:
+            7px;
 
-          line-height: 1.1;
+          line-height:
+            1.1;
 
-          color: #374151;
+          color:
+            #374151;
 
-          overflow: hidden;
+          white-space:
+            nowrap;
 
-          white-space: nowrap;
+          overflow:
+            hidden;
 
-          text-overflow: ellipsis;
+          text-overflow:
+            ellipsis;
         }
 
         .modalBack {
-          position: fixed;
+          position:
+            fixed;
 
           inset: 0;
 
@@ -1189,9 +1408,11 @@ export default function Home() {
 
           display: flex;
 
-          align-items: center;
+          align-items:
+            center;
 
-          justify-content: center;
+          justify-content:
+            center;
 
           padding: 18px;
 
@@ -1211,9 +1432,11 @@ export default function Home() {
               100%
             );
 
-          background: white;
+          background:
+            white;
 
-          border-radius: 14px;
+          border-radius:
+            14px;
 
           padding: 18px;
         }
@@ -1230,26 +1453,32 @@ export default function Home() {
         .closeBtn {
           border: 0;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
-          background: #eef0f3;
+          background:
+            #eef0f3;
 
           padding:
             7px 10px;
         }
 
         .modalField {
-          margin-top: 14px;
+          margin-top:
+            14px;
         }
 
         .modalField label {
           display: block;
 
-          margin-bottom: 5px;
+          margin-bottom:
+            5px;
 
-          font-size: 12px;
+          font-size:
+            12px;
 
-          font-weight: 800;
+          font-weight:
+            800;
         }
 
         .modalField select {
@@ -1257,16 +1486,20 @@ export default function Home() {
         }
 
         .negotiationBox {
-          margin-top: 16px;
+          margin-top:
+            16px;
 
           padding: 13px;
 
-          border-radius: 10px;
+          border-radius:
+            10px;
 
-          background: #f9fafb;
+          background:
+            #f9fafb;
 
           border:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
         }
 
         .checkRow {
@@ -1274,9 +1507,11 @@ export default function Home() {
 
           gap: 8px;
 
-          align-items: center;
+          align-items:
+            center;
 
-          font-weight: 800;
+          font-weight:
+            800;
         }
 
         .checkRow input {
@@ -1290,7 +1525,10 @@ export default function Home() {
 
           grid-template-columns:
             300px
-            minmax(0, 1fr);
+            minmax(
+              0,
+              1fr
+            );
 
           gap: 14px;
         }
@@ -1298,24 +1536,32 @@ export default function Home() {
         .eventList button {
           width: 100%;
 
-          margin-bottom: 7px;
+          margin-bottom:
+            7px;
 
           padding: 10px;
 
-          text-align: left;
+          text-align:
+            left;
 
           border:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
-          background: white;
+          background:
+            white;
         }
 
-        .eventList button.selected {
-          background: #eff6ff;
+        .eventList
+          button.selected {
+          background:
+            #eff6ff;
 
-          border-color: #2563eb;
+          border-color:
+            #2563eb;
         }
 
         .editForm {
@@ -1332,13 +1578,16 @@ export default function Home() {
 
         .slot {
           border:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
 
-          border-radius: 10px;
+          border-radius:
+            10px;
 
           padding: 12px;
 
-          margin-bottom: 10px;
+          margin-bottom:
+            10px;
         }
 
         .slotEdit {
@@ -1354,7 +1603,8 @@ export default function Home() {
         }
 
         .slotStats {
-          margin-top: 8px;
+          margin-top:
+            8px;
 
           display: flex;
 
@@ -1366,16 +1616,52 @@ export default function Home() {
           flex-wrap: wrap;
         }
 
-        .shortage {
-          color: #b91c1c;
+        .stasenBox {
+          display: flex;
 
-          font-weight: 800;
+          align-items:
+            center;
+
+          gap: 7px;
+
+          margin-top:
+            10px;
+
+          padding:
+            9px 10px;
+
+          border-radius:
+            8px;
+
+          background:
+            #f3f4f6;
+        }
+
+        .stasenBox strong {
+          font-size:
+            12px;
+        }
+
+        .stasenBox input {
+          width: 85px;
+
+          padding: 7px;
+        }
+
+        .shortage {
+          color:
+            #b91c1c;
+
+          font-weight:
+            800;
         }
 
         .ok {
-          color: #15803d;
+          color:
+            #15803d;
 
-          font-weight: 800;
+          font-weight:
+            800;
         }
 
         .candidateGrid {
@@ -1385,33 +1671,53 @@ export default function Home() {
             repeat(
               auto-fill,
               minmax(
-                140px,
+                135px,
                 1fr
               )
             );
 
           gap: 7px;
 
-          margin-top: 10px;
+          margin-top:
+            10px;
         }
 
         .candidate {
           border:
-            1px solid #d1d5db;
+            1px solid
+            #d1d5db;
 
-          border-radius: 8px;
+          border-radius:
+            8px;
 
-          background: white;
+          background:
+            white;
 
           padding: 9px;
 
-          text-align: left;
+          text-align:
+            left;
         }
 
         .candidate.assigned {
-          background: #dcfce7;
+          background:
+            #dcfce7;
 
-          border-color: #86efac;
+          border-color:
+            #86efac;
+        }
+
+        .hereText {
+          display: block;
+
+          margin-top:
+            3px;
+
+          font-weight:
+            900;
+
+          color:
+            #15803d;
         }
 
         .staffGrid,
@@ -1437,49 +1743,59 @@ export default function Home() {
           justify-content:
             space-between;
 
-          align-items: center;
+          align-items:
+            center;
 
           gap: 10px;
 
           padding: 11px;
 
           border:
-            1px solid #e5e7eb;
+            1px solid
+            #e5e7eb;
 
-          border-radius: 9px;
+          border-radius:
+            9px;
 
-          background: white;
+          background:
+            white;
         }
 
         .offDate {
-          margin-bottom: 14px;
+          margin-bottom:
+            14px;
         }
 
         .offList {
           display: flex;
 
-          flex-wrap: wrap;
+          flex-wrap:
+            wrap;
 
           gap: 6px;
 
-          margin-top: 6px;
+          margin-top:
+            6px;
         }
 
         .offChip {
           padding:
             6px 9px;
 
-          border-radius: 999px;
+          border-radius:
+            999px;
 
-          background: #f3f4f6;
+          background:
+            #f3f4f6;
 
-          font-size: 11px;
+          font-size:
+            11px;
         }
 
         @media (
-          max-width: 900px
+          max-width:
+            900px
         ) {
-
           .content {
             padding: 9px;
           }
@@ -1497,18 +1813,23 @@ export default function Home() {
 
           .dateHead,
           .dateCell {
-            width: 150px;
+            width:
+              160px;
 
-            min-width: 150px;
+            min-width:
+              160px;
           }
 
           .personHead,
           .shiftCell {
-            width: 72px;
+            width:
+              70px;
 
-            min-width: 72px;
+            min-width:
+              70px;
 
-            max-width: 72px;
+            max-width:
+              70px;
           }
         }
 
@@ -1691,6 +2012,35 @@ export default function Home() {
                         availablePeople.length -
                         allCount;
 
+                      const dateEvents =
+                        eventsByDate[
+                          date
+                        ] || [];
+
+                      const totalRequired =
+                        dateEvents.reduce(
+                          (
+                            total,
+                            event
+                          ) =>
+                            total +
+                            (
+                              event.slots ||
+                              []
+                            ).reduce(
+                              (
+                                slotTotal,
+                                slot
+                              ) =>
+                                slotTotal +
+                                Number(
+                                  slot.required
+                                ),
+                              0
+                            ),
+                          0
+                        );
+
                       return (
 
                         <tr key={date}>
@@ -1709,15 +2059,21 @@ export default function Home() {
                               </strong>
 
                               <span className="availableCount">
-
                                 稼働可能{" "}
                                 {
                                   availablePeople.length
                                 }
                                 人
-
                               </span>
 
+                            </div>
+
+                            <div className="requiredCount">
+                              現場必要{" "}
+                              {
+                                totalRequired
+                              }
+                              人
                             </div>
 
                             <div className="muted">
@@ -1732,29 +2088,52 @@ export default function Home() {
 
                             </div>
 
-                            {(
-                              eventsByDate[
-                                date
-                              ] || []
-                            ).map(
-                              (event) => (
+                            {dateEvents.map(
+                              (event) => {
 
-                                <div
-                                  className="eventMini"
-                                  key={
-                                    event.id
-                                  }
-                                >
+                                const eventRequired =
+                                  (
+                                    event.slots ||
+                                    []
+                                  ).reduce(
+                                    (
+                                      total,
+                                      slot
+                                    ) =>
+                                      total +
+                                      Number(
+                                        slot.required
+                                      ),
+                                    0
+                                  );
 
-                                  <strong>
-                                    {
-                                      event.eventName
+                                return (
+
+                                  <div
+                                    className="eventMini"
+                                    key={
+                                      event.id
                                     }
-                                  </strong>
+                                  >
 
-                                </div>
+                                    <strong>
+                                      {
+                                        event.eventName
+                                      }
+                                    </strong>
 
-                              )
+                                    {" "}
+
+                                    必要
+                                    {
+                                      eventRequired
+                                    }
+                                    人
+
+                                  </div>
+
+                                );
+                              }
                             )}
 
                           </td>
@@ -2425,19 +2804,53 @@ export default function Home() {
                               staff.filter(
                                 (
                                   person
-                                ) =>
-                                  canWork(
-                                    person.id,
-                                    selectedEvent.date,
-                                    slot.time
-                                  )
+                                ) => {
+
+                                  if (
+                                    !canWork(
+                                      person.id,
+                                      selectedEvent.date,
+                                      slot.time
+                                    )
+                                  ) {
+                                    return false;
+                                  }
+
+                                  const assigned =
+                                    getStaffAssignmentOnDate(
+                                      person.id,
+                                      selectedEvent.date
+                                    );
+
+                                  if (
+                                    !assigned
+                                  ) {
+                                    return true;
+                                  }
+
+                                  return (
+                                    assigned.eventId ===
+                                      selectedEvent.id &&
+                                    assigned.slotId ===
+                                      slot.id
+                                  );
+                                }
                               );
+
+                            const stasen =
+                              Number(
+                                slot.stasen
+                              ) || 0;
+
+                            const totalPlaced =
+                              slot.assigned.length +
+                              stasen;
 
                             const shortage =
                               Math.max(
                                 0,
                                 slot.required -
-                                  slot.assigned.length
+                                  totalPlaced
                               );
 
                             return (
@@ -2558,13 +2971,65 @@ export default function Home() {
 
                                 </div>
 
+                                <div className="stasenBox">
+
+                                  <strong>
+                                    スタセン
+                                  </strong>
+
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={
+                                      stasen
+                                    }
+                                    onChange={(e) =>
+                                      updateSlot(
+                                        selectedEvent.id,
+                                        slot.id,
+                                        {
+                                          stasen:
+                                            Math.max(
+                                              0,
+                                              Number(
+                                                e.target.value
+                                              ) ||
+                                                0
+                                            ),
+                                        }
+                                      )
+                                    }
+                                  />
+
+                                  <span className="muted">
+                                    人
+                                  </span>
+
+                                </div>
+
                                 <div className="slotStats">
 
                                   <span className="muted">
 
-                                    稼働可能{" "}
+                                    名簿{" "}
                                     {
-                                      availableStaff.length
+                                      slot.assigned.length
+                                    }
+                                    人
+
+                                    {" / "}
+
+                                    スタセン{" "}
+                                    {
+                                      stasen
+                                    }
+                                    人
+
+                                    {" / "}
+
+                                    合計{" "}
+                                    {
+                                      totalPlaced
                                     }
                                     人
 
@@ -2573,14 +3038,6 @@ export default function Home() {
                                     必要{" "}
                                     {
                                       slot.required
-                                    }
-                                    人
-
-                                    {" / "}
-
-                                    配置{" "}
-                                    {
-                                      slot.assigned.length
                                     }
                                     人
 
@@ -2655,9 +3112,11 @@ export default function Home() {
                                           </div>
 
                                           {assigned && (
-                                            <div>
-                                              ✓ 配置済み
-                                            </div>
+
+                                            <span className="hereText">
+                                              ここ
+                                            </span>
+
                                           )}
 
                                         </button>
@@ -2667,6 +3126,21 @@ export default function Home() {
                                   )}
 
                                 </div>
+
+                                {availableStaff.length ===
+                                  0 && (
+
+                                  <div
+                                    className="muted"
+                                    style={{
+                                      marginTop:
+                                        10,
+                                    }}
+                                  >
+                                    この枠に配置できる名簿スタッフはいません。
+                                  </div>
+
+                                )}
 
                               </div>
 
@@ -2693,6 +3167,10 @@ export default function Home() {
             <h2>
               OFF一覧
             </h2>
+
+            <div className="muted">
+              稼働可能だが、どの現場にも配置されていないスタッフです。
+            </div>
 
             {offRows.map(
               ({
