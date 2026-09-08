@@ -202,33 +202,49 @@ export default function Home() {
     loadEventPdf(selectedEventId);
   }, [selectedEventId, eventFiles]);
 
-  async function login(e) {
-    e.preventDefault();
+  aasync function login(e) {
+  e.preventDefault();
 
-    setLoggingIn(true);
-    setLoginError("");
+  setLoggingIn(true);
+  setLoginError("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: loginEmail,
-      password: loginPassword,
+  try {
+    const response = await fetch("/api/admin-login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        loginId: loginEmail,
+        password: loginPassword,
+      }),
     });
 
-    setLoggingIn(false);
+    const result = await response.json();
+
+    if (!response.ok || !result.ok) {
+      setLoginError(
+        result.message || "IDまたはパスワードが違います。"
+      );
+      return;
+    }
+
+    const { error } = await supabase.auth.setSession({
+      access_token: result.accessToken,
+      refresh_token: result.refreshToken,
+    });
 
     if (error) {
-      setLoginError("メールアドレスまたはパスワードが違います。");
+      console.error(error);
+      setLoginError("ログイン処理に失敗しました。");
     }
+  } catch (error) {
+    console.error(error);
+    setLoginError("ログイン処理に失敗しました。");
+  } finally {
+    setLoggingIn(false);
   }
-
-  async function logout() {
-    await supabase.auth.signOut();
-
-    setStaff([]);
-    setAdmins([]);
-    setShifts({});
-    setEvents([]);
-  }
-
+}
   async function loadData() {
     setLoading(true);
 
