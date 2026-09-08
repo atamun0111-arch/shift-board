@@ -1,33 +1,122 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const SECTIONS = [
+  "整理",
+  "案内",
+  "ケータ",
+  "通し",
+  "搬入",
+  "搬出",
+  "楽屋口",
+  "ランナー",
+];
+
+const HOURS = Array.from(
+  { length: 24 },
+  (_, i) => `${String(i).padStart(2, "0")}:00`
+);
+
+const initialStaff = [
+  { id: "s1", name: "山田 太郎", grade: "3", rank: "2", gender: "男性" },
+  { id: "s2", name: "佐藤 花子", grade: "2", rank: "1", gender: "女性" },
+  { id: "s3", name: "田中 一郎", grade: "F", rank: "3", gender: "男性" },
+];
+
+const initialShifts = {
+  "s1|2026-09-01": {
+    status: "all",
+    startHour: "",
+    negotiation: "none",
+  },
+  "s2|2026-09-01": {
+    status: "time",
+    startHour: "12:00",
+    negotiation: "none",
+  },
+  "s3|2026-09-01": {
+    status: "undecided",
+    startHour: "",
+    negotiation: "pending",
+  },
+};
+
+const initialEvents = [
+  {
+    id: "e1",
+    date: "2026-09-01",
+    eventName: "テスト公演",
+    venueName: "Kアリーナ横浜",
+    slots: [
+      {
+        id: "slot1",
+        section: "整理",
+        time: "10:00",
+        required: 5,
+        assigned: ["s1"],
+      },
+      {
+        id: "slot2",
+        section: "案内",
+        time: "12:00",
+        required: 3,
+        assigned: ["s1", "s2"],
+      },
+    ],
+  },
+];
+
+const emptyShift = {
+  status: "none",
+  startHour: "",
+  negotiation: "none",
+};
+
+function storageRead(key, fallback) {
+  if (typeof window === "undefined") return fallback;
+
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function availabilityLabel(shift) {
+  if (!shift || shift.status === "none") return "未提出";
+  if (shift.status === "all") return "終日";
+  if (shift.status === "time") {
+    return `${shift.startHour || "時間未設定"}〜`;
+  }
+  if (shift.status === "undecided") return "未定";
+  if (shift.status === "off") return "勤務不可";
+
+  return "未提出";
+}
+
+function shiftClass(status) {
+  return (
+    {
+      all: "statusAll",
+      time: "statusTime",
+      undecided: "statusUndecided",
+      off: "statusOff",
+      none: "statusNone",
+    }[status || "none"]
+  );
+}
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("schedule");
+  const [tab, setTab] = useState("board");
+  const [month, setMonth] = useState("2026-09");
 
-  const [staff, setStaff] = useState([
-    {
-      id: 1,
-      name: "山田 太郎",
-      grade: "3",
-      rank: "2",
-      gender: "男性",
-    },
-    {
-      id: 2,
-      name: "佐藤 花子",
-      grade: "2",
-      rank: "1",
-      gender: "女性",
-    },
-    {
-      id: 3,
-      name: "田中 一郎",
-      grade: "F",
-      rank: "3",
-      gender: "男性",
-    },
-  ]);
+  const [staff, setStaff] = useState(initialStaff);
+  const [shifts, setShifts] = useState(initialShifts);
+  const [events, setEvents] = useState(initialEvents);
+
+  const [hydrated, setHydrated] = useState(false);
 
   const [newStaff, setNewStaff] = useState({
     name: "",
@@ -36,63 +125,127 @@ export default function Home() {
     gender: "男性",
   });
 
-  const [selectedDate, setSelectedDate] = useState("2026-09-01");
-
-  const [events, setEvents] = useState({
-    "2026-09-01": {
-      name: "ライブイベント",
-      start: "10:00",
-      sections: [
-        { name: "入場口", required: 5 },
-        { name: "物販", required: 3 },
-        { name: "楽屋", required: 2 },
-      ],
-    },
-    "2026-09-02": {
-      name: "イベント設営",
-      start: "09:00",
-      sections: [
-        { name: "設営", required: 8 },
-        { name: "受付", required: 2 },
-      ],
-    },
+  const [newEvent, setNewEvent] = useState({
+    date: "2026-09-01",
+    eventName: "",
+    venueName: "",
   });
 
-  const [shifts, setShifts] = useState({
-    "1-2026-09-01": "all",
-    "2-2026-09-01": "time",
-    "3-2026-09-01": "undecided",
+  const [selectedEventId, setSelectedEventId] = useState("e1");
 
-    "1-2026-09-02": "off",
-    "2-2026-09-02": "all",
-    "3-2026-09-02": "all",
+  const [newSlot, setNewSlot] = useState({
+    section: "整理",
+    time: "09:00",
+    required: "1",
   });
 
-  const [timeSettings, setTimeSettings] = useState({
-    "2-2026-09-01": "12:00",
-  });
+  useEffect(() => {
+    setStaff(storageRead("sb_staff_v3", initialStaff));
+    setShifts(storageRead("sb_shifts_v3", initialShifts));
+    setEvents(storageRead("sb_events_v3", initialEvents));
+    setHydrated(true);
+  }, []);
 
-  const [negotiated, setNegotiated] = useState({
-    "3-2026-09-01": false,
-  });
+  useEffect(() => {
+    if (hydrated) {
+      localStorage.setItem("sb_staff_v3", JSON.stringify(staff));
+    }
+  }, [staff, hydrated]);
 
-  const [assignments, setAssignments] = useState({
-    "2026-09-01": {
-      "入場口": ["山田 太郎"],
-      "物販": ["佐藤 花子"],
-      "楽屋": [],
-    },
-  });
+  useEffect(() => {
+    if (hydrated) {
+      localStorage.setItem("sb_shifts_v3", JSON.stringify(shifts));
+    }
+  }, [shifts, hydrated]);
 
-  const dates = [
-    "2026-09-01",
-    "2026-09-02",
-    "2026-09-03",
-    "2026-09-04",
-    "2026-09-05",
-    "2026-09-06",
-    "2026-09-07",
-  ];
+  useEffect(() => {
+    if (hydrated) {
+      localStorage.setItem("sb_events_v3", JSON.stringify(events));
+    }
+  }, [events, hydrated]);
+
+  const days = useMemo(() => {
+    const [year, monthNumber] = month.split("-").map(Number);
+    const count = new Date(year, monthNumber, 0).getDate();
+
+    return Array.from(
+      { length: count },
+      (_, index) =>
+        `${month}-${String(index + 1).padStart(2, "0")}`
+    );
+  }, [month]);
+
+  const eventsByDate = useMemo(() => {
+    const map = {};
+
+    for (const event of events) {
+      if (!map[event.date]) {
+        map[event.date] = [];
+      }
+
+      map[event.date].push(event);
+    }
+
+    return map;
+  }, [events]);
+
+  const selectedEvent =
+    events.find((event) => event.id === selectedEventId) ||
+    events[0] ||
+    null;
+
+  function setShift(staffId, date, patch) {
+    const key = `${staffId}|${date}`;
+    const current = shifts[key] || emptyShift;
+
+    setShifts((prev) => ({
+      ...prev,
+      [key]: {
+        ...current,
+        ...patch,
+      },
+    }));
+  }
+
+  function handleNegotiationResult(staffId, date, result) {
+    if (result === "pending") {
+      setShift(staffId, date, {
+        status: "undecided",
+        negotiation: "pending",
+      });
+
+      return;
+    }
+
+    if (result === "all") {
+      setShift(staffId, date, {
+        status: "all",
+        startHour: "",
+        negotiation: "done_all",
+      });
+
+      return;
+    }
+
+    if (result === "time") {
+      setShift(staffId, date, {
+        status: "time",
+        startHour:
+          shifts[`${staffId}|${date}`]?.startHour || "09:00",
+        negotiation: "done_time",
+      });
+
+      return;
+    }
+
+    if (result === "off") {
+      setShift(staffId, date, {
+        status: "off",
+        startHour: "",
+        negotiation: "done_off",
+      });
+    }
+  }
 
   function addStaff() {
     if (!newStaff.name.trim()) {
@@ -100,12 +253,14 @@ export default function Home() {
       return;
     }
 
-    const newMember = {
-      id: Date.now(),
-      ...newStaff,
-    };
-
-    setStaff([...staff, newMember]);
+    setStaff((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        ...newStaff,
+        name: newStaff.name.trim(),
+      },
+    ]);
 
     setNewStaff({
       name: "",
@@ -115,881 +270,1257 @@ export default function Home() {
     });
   }
 
-  function deleteStaff(id) {
-    if (confirm("このスタッフを削除しますか？")) {
-      setStaff(staff.filter((member) => member.id !== id));
-    }
-  }
-
-  function updateShift(staffId, date, value) {
-    const key = `${staffId}-${date}`;
-
-    setShifts({
-      ...shifts,
-      [key]: value,
-    });
-  }
-
-  function updateTime(staffId, date, value) {
-    const key = `${staffId}-${date}`;
-
-    setTimeSettings({
-      ...timeSettings,
-      [key]: value,
-    });
-  }
-
-  function toggleNegotiated(staffId, date) {
-    const key = `${staffId}-${date}`;
-
-    setNegotiated({
-      ...negotiated,
-      [key]: !negotiated[key],
-    });
-  }
-
-  function getShiftLabel(staffId, date) {
-    const key = `${staffId}-${date}`;
-    const shift = shifts[key];
-
-    if (shift === "all") {
-      return "🟢 終日OK";
-    }
-
-    if (shift === "time") {
-      return `🔵 ${timeSettings[key] || "時間指定"}`;
-    }
-
-    if (shift === "undecided") {
-      return "🟡 未定";
-    }
-
-    if (shift === "off") {
-      return "🔴 勤務不可";
-    }
-
-    return "－";
-  }
-
-  function assignStaff(sectionName, staffName) {
-    const currentDateAssignments = assignments[selectedDate] || {};
-
-    const currentSection =
-      currentDateAssignments[sectionName] || [];
-
-    if (currentSection.includes(staffName)) {
+  function addEvent() {
+    if (
+      !newEvent.date ||
+      !newEvent.eventName.trim() ||
+      !newEvent.venueName.trim()
+    ) {
+      alert("日付・現場名・会場名を入力してください");
       return;
     }
 
-    setAssignments({
-      ...assignments,
-      [selectedDate]: {
-        ...currentDateAssignments,
-        [sectionName]: [...currentSection, staffName],
-      },
-    });
+    const event = {
+      id: crypto.randomUUID(),
+      date: newEvent.date,
+      eventName: newEvent.eventName.trim(),
+      venueName: newEvent.venueName.trim(),
+      slots: [],
+    };
+
+    setEvents((prev) => [...prev, event]);
+    setSelectedEventId(event.id);
+
+    setNewEvent((prev) => ({
+      ...prev,
+      eventName: "",
+      venueName: "",
+    }));
   }
 
-  function removeAssignment(sectionName, staffName) {
-    const currentDateAssignments = assignments[selectedDate] || {};
+  function addSlot() {
+    if (!selectedEvent) {
+      alert("先に現場を選択してください");
+      return;
+    }
 
-    setAssignments({
-      ...assignments,
-      [selectedDate]: {
-        ...currentDateAssignments,
-        [sectionName]: (
-          currentDateAssignments[sectionName] || []
-        ).filter((name) => name !== staffName),
-      },
-    });
+    const required = Number(newSlot.required);
+
+    if (!required || required < 1) {
+      alert("必要人数を1以上で入力してください");
+      return;
+    }
+
+    setEvents((prev) =>
+      prev.map((event) =>
+        event.id === selectedEvent.id
+          ? {
+              ...event,
+              slots: [
+                ...event.slots,
+                {
+                  id: crypto.randomUUID(),
+                  section: newSlot.section,
+                  time: newSlot.time,
+                  required,
+                  assigned: [],
+                },
+              ],
+            }
+          : event
+      )
+    );
   }
+
+  function canWork(staffId, date, time) {
+    const shift =
+      shifts[`${staffId}|${date}`] || emptyShift;
+
+    if (shift.status === "all") {
+      return true;
+    }
+
+    if (shift.status === "time" && shift.startHour) {
+      return shift.startHour <= time;
+    }
+
+    return false;
+  }
+
+  function toggleAssignment(eventId, slotId, staffId) {
+    setEvents((prev) =>
+      prev.map((event) => {
+        if (event.id !== eventId) {
+          return event;
+        }
+
+        return {
+          ...event,
+          slots: event.slots.map((slot) => {
+            if (slot.id !== slotId) {
+              return slot;
+            }
+
+            const exists = slot.assigned.includes(staffId);
+
+            return {
+              ...slot,
+              assigned: exists
+                ? slot.assigned.filter((id) => id !== staffId)
+                : [...slot.assigned, staffId],
+            };
+          }),
+        };
+      })
+    );
+  }
+
+  function assignedStaffIdsOnDate(date) {
+    const ids = new Set();
+
+    for (const event of events.filter(
+      (event) => event.date === date
+    )) {
+      for (const slot of event.slots) {
+        for (const id of slot.assigned) {
+          ids.add(id);
+        }
+      }
+    }
+
+    return ids;
+  }
+
+  const offRows = days
+    .map((date) => {
+      const assigned = assignedStaffIdsOnDate(date);
+
+      return {
+        date,
+        people: staff.filter(
+          (person) => !assigned.has(person.id)
+        ),
+      };
+    })
+    .filter((row) => row.people.length > 0);
 
   return (
-    <main style={styles.container}>
-      <header style={styles.header}>
-        <div>
-          <h1 style={styles.title}>SHIFT BOARD</h1>
-          <p style={styles.subtitle}>
-            スタッフ・シフト管理システム
-          </p>
+    <main className="app">
+      <style jsx global>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          background: #f5f6f8;
+          color: #1f2937;
+          font-family: -apple-system, BlinkMacSystemFont,
+            "Hiragino Sans", "Yu Gothic", sans-serif;
+        }
+
+        button,
+        input,
+        select {
+          font: inherit;
+        }
+
+        button {
+          cursor: pointer;
+        }
+
+        .topbar {
+          background: #111827;
+          color: #fff;
+          padding: 18px 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .brand h1 {
+          margin: 0;
+          font-size: 22px;
+          letter-spacing: 0.04em;
+        }
+
+        .brand p {
+          margin: 4px 0 0;
+          color: #9ca3af;
+          font-size: 12px;
+        }
+
+        .month {
+          background: #fff;
+          border: 0;
+          border-radius: 8px;
+          padding: 9px 12px;
+        }
+
+        .tabs {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          padding: 14px 20px;
+          background: #fff;
+          border-bottom: 1px solid #e5e7eb;
+          position: sticky;
+          top: 0;
+          z-index: 20;
+        }
+
+        .tab {
+          border: 0;
+          background: #eef0f3;
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-weight: 700;
+        }
+
+        .tab.active {
+          background: #111827;
+          color: #fff;
+        }
+
+        .content {
+          padding: 20px;
+          max-width: 1600px;
+          margin: auto;
+        }
+
+        .card {
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 18px;
+          margin-bottom: 16px;
+        }
+
+        .titleRow {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 14px;
+        }
+
+        .titleRow h2,
+        .card h3 {
+          margin: 0;
+        }
+
+        .muted {
+          color: #6b7280;
+          font-size: 13px;
+        }
+
+        .primary {
+          border: 0;
+          background: #2563eb;
+          color: white;
+          padding: 10px 14px;
+          border-radius: 8px;
+          font-weight: 700;
+        }
+
+        .danger {
+          border: 0;
+          background: #fee2e2;
+          color: #b91c1c;
+          padding: 7px 10px;
+          border-radius: 7px;
+        }
+
+        .formRow {
+          display: flex;
+          gap: 9px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+
+        .formRow input,
+        .formRow select {
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          padding: 10px;
+          background: white;
+        }
+
+        .boardWrap {
+          overflow: auto;
+          max-height: 72vh;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+        }
+
+        table {
+          border-collapse: separate;
+          border-spacing: 0;
+          min-width: 1200px;
+          width: 100%;
+          background: #fff;
+        }
+
+        th,
+        td {
+          border-right: 1px solid #e5e7eb;
+          border-bottom: 1px solid #e5e7eb;
+          padding: 8px;
+          text-align: center;
+          vertical-align: top;
+        }
+
+        th {
+          background: #f3f4f6;
+          position: sticky;
+          top: 0;
+          z-index: 4;
+        }
+
+        .dateHead {
+          position: sticky;
+          left: 0;
+          z-index: 6;
+          min-width: 220px;
+          text-align: left;
+        }
+
+        .dateCell {
+          position: sticky;
+          left: 0;
+          background: #fff;
+          z-index: 3;
+          text-align: left;
+          min-width: 220px;
+        }
+
+        .eventMini {
+          margin-top: 7px;
+          padding: 7px;
+          border-radius: 7px;
+          background: #eff6ff;
+          font-size: 12px;
+        }
+
+        .personHead {
+          min-width: 150px;
+        }
+
+        .personMeta {
+          font-size: 11px;
+          color: #6b7280;
+          margin-top: 3px;
+        }
+
+        .cellSelect,
+        .timeSelect,
+        .negSelect {
+          width: 100%;
+          border: 1px solid #d1d5db;
+          border-radius: 7px;
+          padding: 7px;
+          background: #fff;
+        }
+
+        .timeSelect,
+        .negSelect {
+          margin-top: 6px;
+          font-size: 12px;
+        }
+
+        .statusAll {
+          background: #dcfce7;
+        }
+
+        .statusTime {
+          background: #dbeafe;
+        }
+
+        .statusUndecided {
+          background: #fef3c7;
+        }
+
+        .statusOff {
+          background: #fee2e2;
+        }
+
+        .statusNone {
+          background: #f9fafb;
+        }
+
+        .staffGrid {
+          display: grid;
+          grid-template-columns: repeat(
+            auto-fill,
+            minmax(260px, 1fr)
+          );
+          gap: 10px;
+          margin-top: 12px;
+        }
+
+        .staffCard {
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          padding: 14px;
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: center;
+        }
+
+        .eventLayout {
+          display: grid;
+          grid-template-columns: 360px 1fr;
+          gap: 16px;
+        }
+
+        .eventList button {
+          width: 100%;
+          text-align: left;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          border-radius: 9px;
+          padding: 12px;
+          margin-bottom: 8px;
+        }
+
+        .eventList button.selected {
+          border-color: #2563eb;
+          background: #eff6ff;
+        }
+
+        .slot {
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          padding: 14px;
+          margin-bottom: 10px;
+        }
+
+        .slotTop {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+
+        .shortage {
+          color: #b91c1c;
+          font-weight: 800;
+        }
+
+        .ok {
+          color: #15803d;
+          font-weight: 800;
+        }
+
+        .candidateGrid {
+          display: grid;
+          grid-template-columns: repeat(
+            auto-fill,
+            minmax(190px, 1fr)
+          );
+          gap: 8px;
+          margin-top: 12px;
+        }
+
+        .candidate {
+          border: 1px solid #d1d5db;
+          background: white;
+          border-radius: 8px;
+          padding: 9px;
+          text-align: left;
+        }
+
+        .candidate.assigned {
+          background: #dcfce7;
+          border-color: #86efac;
+        }
+
+        .candidate.disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+
+        .offDate {
+          margin-bottom: 14px;
+        }
+
+        .offList {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 8px;
+        }
+
+        .offChip {
+          background: #f3f4f6;
+          border-radius: 999px;
+          padding: 7px 10px;
+          font-size: 13px;
+        }
+
+        @media (max-width: 900px) {
+          .eventLayout {
+            grid-template-columns: 1fr;
+          }
+
+          .content {
+            padding: 12px;
+          }
+
+          .dateHead,
+          .dateCell {
+            min-width: 180px;
+          }
+        }
+      `}</style>
+
+      <header className="topbar">
+        <div className="brand">
+          <h1>SHIFT BOARD</h1>
+          <p>イベントスタッフ シフト・配置管理</p>
         </div>
 
-        <div style={styles.admin}>
-          👤 管理者モード
-        </div>
+        <input
+          className="month"
+          type="month"
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+        />
       </header>
 
-      <nav style={styles.nav}>
-        <button
-          onClick={() => setActiveTab("schedule")}
-          style={
-            activeTab === "schedule"
-              ? styles.activeTab
-              : styles.tab
-          }
-        >
-          📅 シフト管理
-        </button>
-
-        <button
-          onClick={() => setActiveTab("staff")}
-          style={
-            activeTab === "staff"
-              ? styles.activeTab
-              : styles.tab
-          }
-        >
-          👥 スタッフ管理
-        </button>
-
-        <button
-          onClick={() => setActiveTab("event")}
-          style={
-            activeTab === "event"
-              ? styles.activeTab
-              : styles.tab
-          }
-        >
-          🎪 現場管理
-        </button>
+      <nav className="tabs">
+        {[
+          ["board", "月間シフト"],
+          ["events", "現場管理・配置"],
+          ["off", "OFF一覧"],
+          ["staff", "スタッフ管理"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            className={`tab ${
+              tab === id ? "active" : ""
+            }`}
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
       </nav>
 
-      {/* ========================= */}
-      {/* シフト管理 */}
-      {/* ========================= */}
-
-      {activeTab === "schedule" && (
-        <section>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2>2026年9月 シフト表</h2>
-              <p style={styles.description}>
-                勤務可能状況を確認・編集できます
-              </p>
+      <div className="content">
+        {tab === "board" && (
+          <>
+            <div className="titleRow">
+              <div>
+                <h2>{month.replace("-", "年")}月 シフト表</h2>
+                <div className="muted">
+                  縦＝日付 / 横＝スタッフ。未定者は交渉結果まで登録できます。
+                </div>
+              </div>
             </div>
 
-            <button style={styles.primaryButton}>
-              🔗 シフト提出URLを発行
-            </button>
-          </div>
-
-          <div style={styles.legend}>
-            <span>🟢 終日勤務可能</span>
-            <span>🔵 時間指定</span>
-            <span>🟡 未定</span>
-            <span>🔴 勤務不可</span>
-          </div>
-
-          <div style={styles.tableWrapper}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.nameColumn}>
-                    スタッフ
-                  </th>
-
-                  {dates.map((date) => (
-                    <th key={date} style={styles.dateColumn}>
-                      {date.slice(5).replace("-", "/")}
+            <div className="boardWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="dateHead">
+                      日付・現場
                     </th>
-                  ))}
-                </tr>
-              </thead>
 
-              <tbody>
-                {staff.map((member) => (
-                  <tr key={member.id}>
-                    <td style={styles.staffCell}>
-                      <strong>{member.name}</strong>
+                    {staff.map((person) => (
+                      <th
+                        className="personHead"
+                        key={person.id}
+                      >
+                        {person.name}
 
-                      <div style={styles.staffInfo}>
-                        {member.grade === "F"
-                          ? "F"
-                          : `${member.grade}年`}
-                        {" / "}
-                        Rank {member.rank}
-                      </div>
-                    </td>
+                        <div className="personMeta">
+                          {person.grade === "F"
+                            ? "F"
+                            : `${person.grade}年`}{" "}
+                          / R{person.rank} /{" "}
+                          {person.gender}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
 
-                    {dates.map((date) => {
-                      const key = `${member.id}-${date}`;
-                      const shift = shifts[key];
+                <tbody>
+                  {days.map((date) => (
+                    <tr key={date}>
+                      <td className="dateCell">
+                        <strong>
+                          {date
+                            .slice(5)
+                            .replace("-", "/")}
+                        </strong>
 
-                      return (
-                        <td key={date} style={styles.shiftCell}>
-                          <select
-                            value={shift || ""}
-                            onChange={(e) =>
-                              updateShift(
-                                member.id,
-                                date,
-                                e.target.value
-                              )
-                            }
-                            style={styles.select}
-                          >
-                            <option value="">
-                              －
-                            </option>
-
-                            <option value="all">
-                              🟢 終日OK
-                            </option>
-
-                            <option value="time">
-                              🔵 時間指定
-                            </option>
-
-                            <option value="undecided">
-                              🟡 未定
-                            </option>
-
-                            <option value="off">
-                              🔴 不可
-                            </option>
-                          </select>
-
-                          {shift === "time" && (
-                            <select
-                              value={
-                                timeSettings[key] || "09:00"
-                              }
-                              onChange={(e) =>
-                                updateTime(
-                                  member.id,
-                                  date,
-                                  e.target.value
-                                )
-                              }
-                              style={styles.timeSelect}
+                        {(eventsByDate[date] || []).map(
+                          (event) => (
+                            <div
+                              className="eventMini"
+                              key={event.id}
                             >
-                              {[
-                                "06:00",
-                                "07:00",
-                                "08:00",
-                                "09:00",
-                                "10:00",
-                                "11:00",
-                                "12:00",
-                                "13:00",
-                                "14:00",
-                                "15:00",
-                                "16:00",
-                                "17:00",
-                                "18:00",
-                                "19:00",
-                                "20:00",
-                              ].map((time) => (
-                                <option
-                                  key={time}
-                                  value={time}
-                                >
-                                  {time}〜
-                                </option>
-                              ))}
-                            </select>
-                          )}
+                              <strong>
+                                {event.eventName}
+                              </strong>
 
-                          {shift === "undecided" && (
-                            <label style={styles.negotiation}>
-                              <input
-                                type="checkbox"
-                                checked={
-                                  negotiated[key] || false
+                              <br />
+
+                              {event.venueName}
+
+                              {event.slots.length > 0 && (
+                                <div>
+                                  {event.slots
+                                    .map(
+                                      (slot) =>
+                                        `${slot.time} ${slot.section}:${slot.required}人`
+                                    )
+                                    .join(" / ")}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
+                      </td>
+
+                      {staff.map((person) => {
+                        const key = `${person.id}|${date}`;
+
+                        const shift =
+                          shifts[key] || emptyShift;
+
+                        return (
+                          <td
+                            key={person.id}
+                            className={shiftClass(
+                              shift.status
+                            )}
+                          >
+                            <select
+                              className="cellSelect"
+                              value={shift.status}
+                              onChange={(e) => {
+                                const status =
+                                  e.target.value;
+
+                                setShift(
+                                  person.id,
+                                  date,
+                                  {
+                                    status,
+
+                                    startHour:
+                                      status === "time"
+                                        ? shift.startHour ||
+                                          "09:00"
+                                        : "",
+
+                                    negotiation:
+                                      status ===
+                                      "undecided"
+                                        ? "pending"
+                                        : "none",
+                                  }
+                                );
+                              }}
+                            >
+                              <option value="none">
+                                未提出
+                              </option>
+
+                              <option value="all">
+                                終日勤務可能
+                              </option>
+
+                              <option value="time">
+                                時間指定
+                              </option>
+
+                              <option value="undecided">
+                                未定
+                              </option>
+
+                              <option value="off">
+                                勤務不可
+                              </option>
+                            </select>
+
+                            {shift.status === "time" && (
+                              <select
+                                className="timeSelect"
+                                value={
+                                  shift.startHour ||
+                                  "09:00"
                                 }
-                                onChange={() =>
-                                  toggleNegotiated(
-                                    member.id,
-                                    date
+                                onChange={(e) =>
+                                  setShift(
+                                    person.id,
+                                    date,
+                                    {
+                                      startHour:
+                                        e.target.value,
+                                    }
                                   )
                                 }
-                              />
-                              交渉済
-                            </label>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+                              >
+                                {HOURS.map((hour) => (
+                                  <option key={hour}>
+                                    {hour}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
 
-      {/* ========================= */}
-      {/* スタッフ管理 */}
-      {/* ========================= */}
+                            {shift.status ===
+                              "undecided" && (
+                              <select
+                                className="negSelect"
+                                value={
+                                  shift.negotiation ||
+                                  "pending"
+                                }
+                                onChange={(e) =>
+                                  handleNegotiationResult(
+                                    person.id,
+                                    date,
+                                    e.target.value
+                                  )
+                                }
+                              >
+                                <option value="pending">
+                                  交渉中 / 未交渉
+                                </option>
 
-      {activeTab === "staff" && (
-        <section>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2>スタッフ管理</h2>
-              <p style={styles.description}>
-                スタッフ情報の登録・編集
-              </p>
+                                <option value="all">
+                                  交渉結果：終日OK
+                                </option>
+
+                                <option value="time">
+                                  交渉結果：時間指定
+                                </option>
+
+                                <option value="off">
+                                  交渉結果：勤務不可
+                                </option>
+                              </select>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </>
+        )}
 
-          <div style={styles.staffForm}>
-            <input
-              placeholder="名前"
-              value={newStaff.name}
-              onChange={(e) =>
-                setNewStaff({
-                  ...newStaff,
-                  name: e.target.value,
-                })
-              }
-              style={styles.input}
-            />
+        {tab === "staff" && (
+          <>
+            <div className="card">
+              <div className="titleRow">
+                <h2>スタッフ管理</h2>
+              </div>
 
-            <select
-              value={newStaff.grade}
-              onChange={(e) =>
-                setNewStaff({
-                  ...newStaff,
-                  grade: e.target.value,
-                })
-              }
-              style={styles.formSelect}
-            >
-              <option value="1">1年</option>
-              <option value="2">2年</option>
-              <option value="3">3年</option>
-              <option value="4">4年</option>
-              <option value="F">F（フリーター）</option>
-            </select>
+              <div className="formRow">
+                <input
+                  placeholder="名前"
+                  value={newStaff.name}
+                  onChange={(e) =>
+                    setNewStaff({
+                      ...newStaff,
+                      name: e.target.value,
+                    })
+                  }
+                />
 
-            <select
-              value={newStaff.rank}
-              onChange={(e) =>
-                setNewStaff({
-                  ...newStaff,
-                  rank: e.target.value,
-                })
-              }
-              style={styles.formSelect}
-            >
-              <option value="無">ランクなし</option>
-              <option value="1">ランク1</option>
-              <option value="2">ランク2</option>
-              <option value="3">ランク3</option>
-              <option value="4">ランク4</option>
-            </select>
+                <select
+                  value={newStaff.grade}
+                  onChange={(e) =>
+                    setNewStaff({
+                      ...newStaff,
+                      grade: e.target.value,
+                    })
+                  }
+                >
+                  <option value="1">1年</option>
+                  <option value="2">2年</option>
+                  <option value="3">3年</option>
+                  <option value="4">4年</option>
+                  <option value="F">F</option>
+                </select>
 
-            <select
-              value={newStaff.gender}
-              onChange={(e) =>
-                setNewStaff({
-                  ...newStaff,
-                  gender: e.target.value,
-                })
-              }
-              style={styles.formSelect}
-            >
-              <option value="男性">男性</option>
-              <option value="女性">女性</option>
-              <option value="その他">その他</option>
-            </select>
+                <select
+                  value={newStaff.rank}
+                  onChange={(e) =>
+                    setNewStaff({
+                      ...newStaff,
+                      rank: e.target.value,
+                    })
+                  }
+                >
+                  <option value="無">無</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select>
 
-            <button
-              onClick={addStaff}
-              style={styles.primaryButton}
-            >
-              ＋ スタッフ追加
-            </button>
-          </div>
-
-          <div style={styles.staffList}>
-            {staff.map((member) => (
-              <div
-                key={member.id}
-                style={styles.staffCard}
-              >
-                <div>
-                  <strong style={{ fontSize: "18px" }}>
-                    {member.name}
-                  </strong>
-
-                  <p style={styles.cardInfo}>
-                    学年：{member.grade === "F"
-                      ? "F"
-                      : `${member.grade}年`}
-                    {"　"}
-                    ランク：{member.rank}
-                    {"　"}
-                    性別：{member.gender}
-                  </p>
-                </div>
+                <select
+                  value={newStaff.gender}
+                  onChange={(e) =>
+                    setNewStaff({
+                      ...newStaff,
+                      gender: e.target.value,
+                    })
+                  }
+                >
+                  <option>男性</option>
+                  <option>女性</option>
+                  <option>その他</option>
+                </select>
 
                 <button
-                  onClick={() => deleteStaff(member.id)}
-                  style={styles.deleteButton}
+                  className="primary"
+                  onClick={addStaff}
                 >
-                  削除
+                  追加
                 </button>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ========================= */}
-      {/* 現場管理 */}
-      {/* ========================= */}
-
-      {activeTab === "event" && (
-        <section>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2>現場・配置管理</h2>
-              <p style={styles.description}>
-                日付ごとの現場情報とスタッフ配置
-              </p>
             </div>
-          </div>
 
-          <div style={styles.dateButtons}>
-            {dates.map((date) => (
-              <button
-                key={date}
-                onClick={() => setSelectedDate(date)}
-                style={
-                  selectedDate === date
-                    ? styles.selectedDate
-                    : styles.dateButton
-                }
-              >
-                {date}
-              </button>
-            ))}
-          </div>
+            <div className="staffGrid">
+              {staff.map((person) => (
+                <div
+                  className="staffCard"
+                  key={person.id}
+                >
+                  <div>
+                    <strong>{person.name}</strong>
 
-          {events[selectedDate] ? (
-            <>
-              <div style={styles.eventCard}>
-                <h2>
-                  🎪 {events[selectedDate].name}
-                </h2>
+                    <div className="muted">
+                      {person.grade === "F"
+                        ? "F"
+                        : `${person.grade}年`}{" "}
+                      / ランク {person.rank} /{" "}
+                      {person.gender}
+                    </div>
+                  </div>
 
-                <p>
-                  ⏰ 開始時間：
-                  {events[selectedDate].start}
-                </p>
+                  <button
+                    className="danger"
+                    onClick={() =>
+                      setStaff((prev) =>
+                        prev.filter(
+                          (staffMember) =>
+                            staffMember.id !==
+                            person.id
+                        )
+                      )
+                    }
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === "events" && (
+          <>
+            <div className="card">
+              <div className="titleRow">
+                <div>
+                  <h2>現場登録</h2>
+
+                  <div className="muted">
+                    現場名・会場名を登録し、その中に時間×セクション×必要人数を追加します。
+                  </div>
+                </div>
               </div>
 
-              <h3>セクション別 必要人数・配置</h3>
+              <div className="formRow">
+                <input
+                  type="date"
+                  value={newEvent.date}
+                  onChange={(e) =>
+                    setNewEvent({
+                      ...newEvent,
+                      date: e.target.value,
+                    })
+                  }
+                />
 
-              {events[selectedDate].sections.map(
-                (section) => {
-                  const assigned =
-                    assignments[selectedDate]?.[
-                      section.name
-                    ] || [];
+                <input
+                  placeholder="現場名"
+                  value={newEvent.eventName}
+                  onChange={(e) =>
+                    setNewEvent({
+                      ...newEvent,
+                      eventName: e.target.value,
+                    })
+                  }
+                />
 
-                  return (
-                    <div
-                      key={section.name}
-                      style={styles.sectionCard}
-                    >
-                      <div style={styles.sectionTop}>
-                        <div>
-                          <strong
-                            style={{ fontSize: "20px" }}
-                          >
-                            {section.name}
-                          </strong>
+                <input
+                  placeholder="会場名"
+                  value={newEvent.venueName}
+                  onChange={(e) =>
+                    setNewEvent({
+                      ...newEvent,
+                      venueName: e.target.value,
+                    })
+                  }
+                />
 
-                          <p>
-                            必要人数：
-                            {section.required}人
-                            {" / "}
-                            配置済：
-                            {assigned.length}人
-                          </p>
-                        </div>
-
-                        <div
-                          style={{
-                            ...styles.statusBadge,
-                            background:
-                              assigned.length >=
-                              section.required
-                                ? "#dcfce7"
-                                : "#fee2e2",
-                          }}
-                        >
-                          {assigned.length >=
-                          section.required
-                            ? "充足"
-                            : "不足"}
-                        </div>
-                      </div>
-
-                      <div style={styles.assignmentArea}>
-                        {assigned.map((name) => (
-                          <span
-                            key={name}
-                            style={styles.assignedStaff}
-                          >
-                            {name}
-
-                            <button
-                              onClick={() =>
-                                removeAssignment(
-                                  section.name,
-                                  name
-                                )
-                              }
-                              style={styles.removeButton}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-
-                      <select
-                        defaultValue=""
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            assignStaff(
-                              section.name,
-                              e.target.value
-                            );
-                            e.target.value = "";
-                          }
-                        }}
-                        style={styles.assignSelect}
-                      >
-                        <option value="">
-                          ＋ スタッフを配置
-                        </option>
-
-                        {staff.map((member) => (
-                          <option
-                            key={member.id}
-                            value={member.name}
-                          >
-                            {member.name}
-                            {"（"}
-                            {getShiftLabel(
-                              member.id,
-                              selectedDate
-                            )}
-                            {"）"}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                }
-              )}
-            </>
-          ) : (
-            <div style={styles.empty}>
-              この日の現場は登録されていません
+                <button
+                  className="primary"
+                  onClick={addEvent}
+                >
+                  現場を追加
+                </button>
+              </div>
             </div>
-          )}
-        </section>
-      )}
+
+            <div className="eventLayout">
+              <div className="card eventList">
+                <h3>登録現場</h3>
+
+                {events.length === 0 && (
+                  <div className="muted">
+                    まだ現場がありません。
+                  </div>
+                )}
+
+                {events
+                  .slice()
+                  .sort((a, b) =>
+                    a.date.localeCompare(b.date)
+                  )
+                  .map((event) => (
+                    <button
+                      key={event.id}
+                      className={
+                        selectedEvent?.id ===
+                        event.id
+                          ? "selected"
+                          : ""
+                      }
+                      onClick={() =>
+                        setSelectedEventId(
+                          event.id
+                        )
+                      }
+                    >
+                      <strong>
+                        {event.date
+                          .slice(5)
+                          .replace("-", "/")}{" "}
+                        {event.eventName}
+                      </strong>
+
+                      <div className="muted">
+                        {event.venueName}
+                      </div>
+                    </button>
+                  ))}
+              </div>
+
+              <div>
+                {selectedEvent ? (
+                  <>
+                    <div className="card">
+                      <div className="titleRow">
+                        <div>
+                          <h2>
+                            {
+                              selectedEvent.eventName
+                            }
+                          </h2>
+
+                          <div className="muted">
+                            {selectedEvent.date} /{" "}
+                            {
+                              selectedEvent.venueName
+                            }
+                          </div>
+                        </div>
+                      </div>
+
+                      <h3
+                        style={{
+                          marginTop: 20,
+                        }}
+                      >
+                        時間・セクション追加
+                      </h3>
+
+                      <div className="formRow">
+                        <select
+                          value={
+                            newSlot.section
+                          }
+                          onChange={(e) =>
+                            setNewSlot({
+                              ...newSlot,
+                              section:
+                                e.target.value,
+                            })
+                          }
+                        >
+                          {SECTIONS.map(
+                            (section) => (
+                              <option
+                                key={section}
+                              >
+                                {section}
+                              </option>
+                            )
+                          )}
+                        </select>
+
+                        <select
+                          value={newSlot.time}
+                          onChange={(e) =>
+                            setNewSlot({
+                              ...newSlot,
+                              time: e.target.value,
+                            })
+                          }
+                        >
+                          {HOURS.map((hour) => (
+                            <option key={hour}>
+                              {hour}
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="必要人数"
+                          value={newSlot.required}
+                          onChange={(e) =>
+                            setNewSlot({
+                              ...newSlot,
+                              required:
+                                e.target.value,
+                            })
+                          }
+                        />
+
+                        <button
+                          className="primary"
+                          onClick={addSlot}
+                        >
+                          追加
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="card">
+                      <h3>配置</h3>
+
+                      {selectedEvent.slots
+                        .length === 0 && (
+                        <div className="muted">
+                          時間・セクションを追加してください。
+                        </div>
+                      )}
+
+                      {selectedEvent.slots
+                        .slice()
+                        .sort((a, b) =>
+                          a.time.localeCompare(
+                            b.time
+                          )
+                        )
+                        .map((slot) => {
+                          const shortage =
+                            Math.max(
+                              0,
+                              slot.required -
+                                slot.assigned
+                                  .length
+                            );
+
+                          return (
+                            <div
+                              className="slot"
+                              key={slot.id}
+                            >
+                              <div className="slotTop">
+                                <div>
+                                  <strong>
+                                    {slot.time}　
+                                    {slot.section}
+                                  </strong>
+
+                                  <div className="muted">
+                                    必要{" "}
+                                    {slot.required}人 /
+                                    配置{" "}
+                                    {
+                                      slot.assigned
+                                        .length
+                                    }
+                                    人
+                                  </div>
+                                </div>
+
+                                <span
+                                  className={
+                                    shortage > 0
+                                      ? "shortage"
+                                      : "ok"
+                                  }
+                                >
+                                  {shortage > 0
+                                    ? `あと${shortage}人不足`
+                                    : "充足"}
+                                </span>
+                              </div>
+
+                              <div className="candidateGrid">
+                                {staff.map(
+                                  (person) => {
+                                    const available =
+                                      canWork(
+                                        person.id,
+                                        selectedEvent.date,
+                                        slot.time
+                                      );
+
+                                    const assigned =
+                                      slot.assigned.includes(
+                                        person.id
+                                      );
+
+                                    const shift =
+                                      shifts[
+                                        `${person.id}|${selectedEvent.date}`
+                                      ] ||
+                                      emptyShift;
+
+                                    return (
+                                      <button
+                                        key={
+                                          person.id
+                                        }
+                                        disabled={
+                                          !available &&
+                                          !assigned
+                                        }
+                                        className={`candidate ${
+                                          assigned
+                                            ? "assigned"
+                                            : ""
+                                        } ${
+                                          !available &&
+                                          !assigned
+                                            ? "disabled"
+                                            : ""
+                                        }`}
+                                        onClick={() =>
+                                          toggleAssignment(
+                                            selectedEvent.id,
+                                            slot.id,
+                                            person.id
+                                          )
+                                        }
+                                      >
+                                        <strong>
+                                          {
+                                            person.name
+                                          }
+                                        </strong>
+
+                                        <div className="muted">
+                                          {availabilityLabel(
+                                            shift
+                                          )}
+                                        </div>
+
+                                        {assigned && (
+                                          <div>
+                                            ✓ 配置済み
+                                          </div>
+                                        )}
+                                      </button>
+                                    );
+                                  }
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </>
+                ) : (
+                  <div className="card">
+                    現場を追加してください。
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {tab === "off" && (
+          <div className="card">
+            <div className="titleRow">
+              <div>
+                <h2>OFF一覧</h2>
+
+                <div className="muted">
+                  その日にどの現場・セクションにも配置されていないスタッフです。
+                </div>
+              </div>
+            </div>
+
+            {offRows.map(({ date, people }) => (
+              <div
+                className="offDate"
+                key={date}
+              >
+                <strong>
+                  {date
+                    .slice(5)
+                    .replace("-", "/")}
+                </strong>
+
+                <div className="offList">
+                  {people.map((person) => {
+                    const shift =
+                      shifts[
+                        `${person.id}|${date}`
+                      ] || emptyShift;
+
+                    return (
+                      <span
+                        className="offChip"
+                        key={person.id}
+                      >
+                        {person.name}｜
+                        {availabilityLabel(
+                          shift
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </main>
   );
 }
-
-const styles = {
-  container: {
-    maxWidth: "1500px",
-    margin: "0 auto",
-    padding: "30px",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif',
-    background: "#f6f7fb",
-    minHeight: "100vh",
-    color: "#1f2937",
-  },
-
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "30px",
-  },
-
-  title: {
-    margin: 0,
-    fontSize: "32px",
-  },
-
-  subtitle: {
-    margin: "5px 0 0",
-    color: "#6b7280",
-  },
-
-  admin: {
-    background: "#1f2937",
-    color: "white",
-    padding: "10px 18px",
-    borderRadius: "10px",
-  },
-
-  nav: {
-    display: "flex",
-    gap: "10px",
-    marginBottom: "30px",
-    borderBottom: "1px solid #ddd",
-    paddingBottom: "15px",
-  },
-
-  tab: {
-    padding: "12px 20px",
-    border: "none",
-    background: "white",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "15px",
-  },
-
-  activeTab: {
-    padding: "12px 20px",
-    border: "none",
-    background: "#2563eb",
-    color: "white",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "15px",
-  },
-
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
-  },
-
-  description: {
-    color: "#6b7280",
-  },
-
-  primaryButton: {
-    background: "#2563eb",
-    color: "white",
-    border: "none",
-    padding: "12px 18px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: "bold",
-  },
-
-  legend: {
-    display: "flex",
-    gap: "20px",
-    marginBottom: "20px",
-    background: "white",
-    padding: "15px",
-    borderRadius: "10px",
-    flexWrap: "wrap",
-  },
-
-  tableWrapper: {
-    overflowX: "auto",
-    background: "white",
-    borderRadius: "12px",
-    boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-  },
-
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    minWidth: "1100px",
-  },
-
-  nameColumn: {
-    minWidth: "180px",
-    padding: "15px",
-    textAlign: "left",
-    background: "#f3f4f6",
-  },
-
-  dateColumn: {
-    padding: "15px",
-    background: "#f3f4f6",
-  },
-
-  staffCell: {
-    padding: "15px",
-    borderBottom: "1px solid #e5e7eb",
-  },
-
-  staffInfo: {
-    fontSize: "12px",
-    color: "#6b7280",
-    marginTop: "5px",
-  },
-
-  shiftCell: {
-    padding: "8px",
-    borderBottom: "1px solid #e5e7eb",
-    textAlign: "center",
-    minWidth: "150px",
-  },
-
-  select: {
-    width: "100%",
-    padding: "8px",
-    borderRadius: "6px",
-    border: "1px solid #d1d5db",
-  },
-
-  timeSelect: {
-    width: "100%",
-    marginTop: "5px",
-    padding: "6px",
-    borderRadius: "6px",
-    border: "1px solid #d1d5db",
-  },
-
-  negotiation: {
-    display: "block",
-    fontSize: "12px",
-    marginTop: "6px",
-  },
-
-  staffForm: {
-    display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
-    background: "white",
-    padding: "20px",
-    borderRadius: "12px",
-    marginBottom: "20px",
-  },
-
-  input: {
-    padding: "12px",
-    border: "1px solid #d1d5db",
-    borderRadius: "8px",
-    minWidth: "200px",
-  },
-
-  formSelect: {
-    padding: "12px",
-    border: "1px solid #d1d5db",
-    borderRadius: "8px",
-  },
-
-  staffList: {
-    display: "grid",
-    gap: "12px",
-  },
-
-  staffCard: {
-    background: "white",
-    padding: "20px",
-    borderRadius: "10px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  cardInfo: {
-    color: "#6b7280",
-    marginBottom: 0,
-  },
-
-  deleteButton: {
-    background: "#ef4444",
-    color: "white",
-    border: "none",
-    padding: "8px 14px",
-    borderRadius: "6px",
-    cursor: "pointer",
-  },
-
-  dateButtons: {
-    display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
-    marginBottom: "25px",
-  },
-
-  dateButton: {
-    padding: "10px 15px",
-    border: "1px solid #d1d5db",
-    background: "white",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-
-  selectedDate: {
-    padding: "10px 15px",
-    border: "1px solid #2563eb",
-    background: "#2563eb",
-    color: "white",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-
-  eventCard: {
-    background: "#dbeafe",
-    padding: "25px",
-    borderRadius: "12px",
-    marginBottom: "25px",
-  },
-
-  sectionCard: {
-    background: "white",
-    padding: "20px",
-    borderRadius: "12px",
-    marginBottom: "15px",
-  },
-
-  sectionTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  statusBadge: {
-    padding: "8px 15px",
-    borderRadius: "20px",
-    fontWeight: "bold",
-  },
-
-  assignmentArea: {
-    display: "flex",
-    gap: "8px",
-    flexWrap: "wrap",
-    margin: "15px 0",
-  },
-
-  assignedStaff: {
-    background: "#dbeafe",
-    padding: "8px 12px",
-    borderRadius: "20px",
-  },
-
-  removeButton: {
-    border: "none",
-    background: "transparent",
-    marginLeft: "8px",
-    cursor: "pointer",
-  },
-
-  assignSelect: {
-    padding: "10px",
-    borderRadius: "8px",
-    border: "1px solid #d1d5db",
-  },
-
-  empty: {
-    background: "white",
-    padding: "50px",
-    textAlign: "center",
-    borderRadius: "12px",
-    color: "#6b7280",
-  },
-};
