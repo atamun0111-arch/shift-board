@@ -202,7 +202,7 @@ export default function Home() {
     loadEventPdf(selectedEventId);
   }, [selectedEventId, eventFiles]);
 
-  async function login(e) {
+async function login(e) {
   e.preventDefault();
 
   setLoggingIn(true);
