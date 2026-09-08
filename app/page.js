@@ -202,49 +202,59 @@ export default function Home() {
     loadEventPdf(selectedEventId);
   }, [selectedEventId, eventFiles]);
 
-async function login(e) {
-  e.preventDefault();
+  async function login(e) {
+    e.preventDefault();
 
-  setLoggingIn(true);
-  setLoginError("");
+    setLoggingIn(true);
+    setLoginError("");
 
-  try {
-    const response = await fetch("/api/admin-login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        loginId: loginEmail,
-        password: loginPassword,
-      }),
-    });
+    try {
+      const response = await fetch("/api/admin-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          loginId: loginEmail,
+          password: loginPassword,
+        }),
+      });
 
-    const result = await response.json();
+      const result = await response.json();
 
-    if (!response.ok || !result.ok) {
-      setLoginError(
-        result.message || "IDまたはパスワードが違います。"
-      );
-      return;
-    }
+      if (!response.ok || !result.ok) {
+        setLoginError(
+          result.message || "IDまたはパスワードが違います。"
+        );
+        return;
+      }
 
-    const { error } = await supabase.auth.setSession({
-      access_token: result.accessToken,
-      refresh_token: result.refreshToken,
-    });
+      const { error } = await supabase.auth.setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+      });
 
-    if (error) {
+      if (error) {
+        console.error(error);
+        setLoginError("ログイン処理に失敗しました。");
+      }
+    } catch (error) {
       console.error(error);
       setLoginError("ログイン処理に失敗しました。");
+    } finally {
+      setLoggingIn(false);
     }
-  } catch (error) {
-    console.error(error);
-    setLoginError("ログイン処理に失敗しました。");
-  } finally {
-    setLoggingIn(false);
   }
-}
+
+  async function logout() {
+    await supabase.auth.signOut();
+
+    setStaff([]);
+    setAdmins([]);
+    setShifts({});
+    setEvents([]);
+  }
+
   async function loadData() {
     setLoading(true);
 
@@ -1319,8 +1329,8 @@ async function login(e) {
           <p>管理者ログイン</p>
 
           <input
-            type="email"
-            placeholder="メールアドレス"
+            type="text"
+            placeholder="管理者ID"
             value={loginEmail}
             onChange={(e) =>
               setLoginEmail(e.target.value)
