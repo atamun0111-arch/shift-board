@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Shift Board",
-  description: "スタッフシフト管理システム",
+  title: "3班現場割",
+  description: "3班 現場割・シフト管理システム",
 };
 
 export default function RootLayout({ children }) {
