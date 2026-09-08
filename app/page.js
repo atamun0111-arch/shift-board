@@ -19,28 +19,56 @@ const HOURS = Array.from(
 );
 
 const initialStaff = [
-  { id: "s1", name: "山田 太郎", grade: "3", rank: "2", gender: "男性" },
-  { id: "s2", name: "佐藤 花子", grade: "2", rank: "1", gender: "女性" },
-  { id: "s3", name: "田中 一郎", grade: "F", rank: "3", gender: "男性" },
+  {
+    id: "s1",
+    name: "山田 太郎",
+    grade: "3",
+    rank: "2",
+    gender: "男性",
+  },
+  {
+    id: "s2",
+    name: "佐藤 花子",
+    grade: "2",
+    rank: "1",
+    gender: "女性",
+  },
+  {
+    id: "s3",
+    name: "田中 一郎",
+    grade: "F",
+    rank: "3",
+    gender: "男性",
+  },
+];
+
+const initialAdmins = [
+  {
+    id: "a1",
+    name: "沼田",
+  },
 ];
 
 const initialShifts = {
   "s1|2026-09-01": {
     status: "all",
     startHour: "",
-    negotiation: "none",
+    negotiated: false,
+    negotiatedBy: "",
   },
 
   "s2|2026-09-01": {
     status: "time",
     startHour: "12:00",
-    negotiation: "none",
+    negotiated: false,
+    negotiatedBy: "",
   },
 
   "s3|2026-09-01": {
     status: "undecided",
     startHour: "",
-    negotiation: "pending",
+    negotiated: false,
+    negotiatedBy: "",
   },
 };
 
@@ -74,53 +102,78 @@ const initialEvents = [
 const emptyShift = {
   status: "none",
   startHour: "",
-  negotiation: "none",
+  negotiated: false,
+  negotiatedBy: "",
 };
 
 function storageRead(key, fallback) {
-  if (typeof window === "undefined") return fallback;
+  if (typeof window === "undefined") {
+    return fallback;
+  }
 
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
+
+    return raw
+      ? JSON.parse(raw)
+      : fallback;
   } catch {
     return fallback;
   }
 }
 
 function availabilityLabel(shift) {
-  if (!shift || shift.status === "none") return "未提出";
+  if (!shift || shift.status === "none") {
+    return "未提出";
+  }
 
-  if (shift.status === "all") return "終日";
+  if (shift.status === "all") {
+    return "終日勤務可能";
+  }
 
   if (shift.status === "time") {
     return `${shift.startHour || "時間未設定"}〜`;
   }
 
-  if (shift.status === "undecided") return "未定";
+  if (shift.status === "undecided") {
+    return "未定";
+  }
 
-  if (shift.status === "off") return "勤務不可";
+  if (shift.status === "off") {
+    return "勤務不可";
+  }
 
   return "未提出";
 }
 
 function compactLabel(shift) {
-  if (!shift || shift.status === "none") return "—";
-
-  if (shift.status === "all") return "終日";
-
-  if (shift.status === "time") {
-    return `${(shift.startHour || "--:--").slice(0, 2)}時〜`;
+  if (!shift || shift.status === "none") {
+    return "—";
   }
 
-  if (shift.status === "undecided") return "未定";
+  if (shift.status === "all") {
+    return "⭕️";
+  }
 
-  if (shift.status === "off") return "不可";
+  if (shift.status === "time") {
+    return `${(shift.startHour || "--:--").slice(
+      0,
+      2
+    )}時〜`;
+  }
+
+  if (shift.status === "undecided") {
+    return "🔺";
+  }
+
+  if (shift.status === "off") {
+    return "❌";
+  }
 
   return "—";
 }
 
-function shiftClass(status) {
+function statusClass(status) {
   return {
     all: "statusAll",
     time: "statusTime",
@@ -131,100 +184,144 @@ function shiftClass(status) {
 }
 
 export default function Home() {
-  const [tab, setTab] = useState("board");
+  const [tab, setTab] =
+    useState("board");
 
-  const [month, setMonth] = useState("2026-09");
+  const [month, setMonth] =
+    useState("2026-09");
 
-  const [staff, setStaff] = useState(initialStaff);
+  const [staff, setStaff] =
+    useState(initialStaff);
 
-  const [shifts, setShifts] = useState(initialShifts);
+  const [admins, setAdmins] =
+    useState(initialAdmins);
 
-  const [events, setEvents] = useState(initialEvents);
+  const [shifts, setShifts] =
+    useState(initialShifts);
 
-  const [hydrated, setHydrated] = useState(false);
+  const [events, setEvents] =
+    useState(initialEvents);
 
-  const [editingCell, setEditingCell] = useState(null);
+  const [hydrated, setHydrated] =
+    useState(false);
 
-  const [newStaff, setNewStaff] = useState({
-    name: "",
-    grade: "1",
-    rank: "無",
-    gender: "男性",
-  });
+  const [editingCell, setEditingCell] =
+    useState(null);
 
-  const [newEvent, setNewEvent] = useState({
-    date: "2026-09-01",
-    eventName: "",
-    venueName: "",
-  });
+  const [newStaff, setNewStaff] =
+    useState({
+      name: "",
+      grade: "1",
+      rank: "無",
+      gender: "男性",
+    });
 
-  const [selectedEventId, setSelectedEventId] =
-    useState("e1");
+  const [newAdmin, setNewAdmin] =
+    useState("");
 
-  const [newSlot, setNewSlot] = useState({
-    section: "整理",
-    time: "09:00",
-    required: "1",
-  });
+  const [newEvent, setNewEvent] =
+    useState({
+      date: "2026-09-01",
+      eventName: "",
+      venueName: "",
+    });
+
+  const [
+    selectedEventId,
+    setSelectedEventId,
+  ] = useState("e1");
+
+  const [newSlot, setNewSlot] =
+    useState({
+      section: "整理",
+      time: "09:00",
+      required: "1",
+    });
 
   useEffect(() => {
     setStaff(
-      storageRead("sb_staff_v4", initialStaff)
+      storageRead(
+        "sb_staff_v5",
+        initialStaff
+      )
+    );
+
+    setAdmins(
+      storageRead(
+        "sb_admins_v5",
+        initialAdmins
+      )
     );
 
     setShifts(
-      storageRead("sb_shifts_v4", initialShifts)
+      storageRead(
+        "sb_shifts_v5",
+        initialShifts
+      )
     );
 
     setEvents(
-      storageRead("sb_events_v4", initialEvents)
+      storageRead(
+        "sb_events_v5",
+        initialEvents
+      )
     );
 
     setHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (hydrated) {
-      localStorage.setItem(
-        "sb_staff_v4",
-        JSON.stringify(staff)
-      );
-    }
+    if (!hydrated) return;
+
+    localStorage.setItem(
+      "sb_staff_v5",
+      JSON.stringify(staff)
+    );
   }, [staff, hydrated]);
 
   useEffect(() => {
-    if (hydrated) {
-      localStorage.setItem(
-        "sb_shifts_v4",
-        JSON.stringify(shifts)
-      );
-    }
+    if (!hydrated) return;
+
+    localStorage.setItem(
+      "sb_admins_v5",
+      JSON.stringify(admins)
+    );
+  }, [admins, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    localStorage.setItem(
+      "sb_shifts_v5",
+      JSON.stringify(shifts)
+    );
   }, [shifts, hydrated]);
 
   useEffect(() => {
-    if (hydrated) {
-      localStorage.setItem(
-        "sb_events_v4",
-        JSON.stringify(events)
-      );
-    }
+    if (!hydrated) return;
+
+    localStorage.setItem(
+      "sb_events_v5",
+      JSON.stringify(events)
+    );
   }, [events, hydrated]);
 
   const days = useMemo(() => {
     const [year, monthNumber] =
       month.split("-").map(Number);
 
-    const count =
-      new Date(year, monthNumber, 0).getDate();
+    const count = new Date(
+      year,
+      monthNumber,
+      0
+    ).getDate();
 
     return Array.from(
       { length: count },
-
       (_, index) =>
-        `${month}-${String(index + 1).padStart(
-          2,
-          "0"
-        )}`
+        `${month}-${String(
+          index + 1
+        ).padStart(2, "0")}`
     );
   }, [month]);
 
@@ -244,16 +341,23 @@ export default function Home() {
 
   const selectedEvent =
     events.find(
-      (event) => event.id === selectedEventId
+      (event) =>
+        event.id === selectedEventId
     ) ||
     events[0] ||
     null;
 
-  function setShift(staffId, date, patch) {
-    const key = `${staffId}|${date}`;
+  function setShift(
+    staffId,
+    date,
+    patch
+  ) {
+    const key =
+      `${staffId}|${date}`;
 
     const current =
-      shifts[key] || emptyShift;
+      shifts[key] ||
+      emptyShift;
 
     setShifts((prev) => ({
       ...prev,
@@ -265,56 +369,12 @@ export default function Home() {
     }));
   }
 
-  function handleNegotiationResult(
-    staffId,
-    date,
-    result
-  ) {
-    if (result === "pending") {
-      setShift(staffId, date, {
-        status: "undecided",
-        negotiation: "pending",
-      });
-
-      return;
-    }
-
-    if (result === "all") {
-      setShift(staffId, date, {
-        status: "all",
-        startHour: "",
-        negotiation: "done_all",
-      });
-
-      return;
-    }
-
-    if (result === "time") {
-      setShift(staffId, date, {
-        status: "time",
-
-        startHour:
-          shifts[`${staffId}|${date}`]
-            ?.startHour || "09:00",
-
-        negotiation: "done_time",
-      });
-
-      return;
-    }
-
-    if (result === "off") {
-      setShift(staffId, date, {
-        status: "off",
-        startHour: "",
-        negotiation: "done_off",
-      });
-    }
-  }
-
   function addStaff() {
     if (!newStaff.name.trim()) {
-      alert("名前を入力してください");
+      alert(
+        "名前を入力してください"
+      );
+
       return;
     }
 
@@ -324,7 +384,8 @@ export default function Home() {
       {
         id: crypto.randomUUID(),
         ...newStaff,
-        name: newStaff.name.trim(),
+        name:
+          newStaff.name.trim(),
       },
     ]);
 
@@ -334,6 +395,27 @@ export default function Home() {
       rank: "無",
       gender: "男性",
     });
+  }
+
+  function addAdmin() {
+    if (!newAdmin.trim()) {
+      alert(
+        "管理者名を入力してください"
+      );
+
+      return;
+    }
+
+    setAdmins((prev) => [
+      ...prev,
+
+      {
+        id: crypto.randomUUID(),
+        name: newAdmin.trim(),
+      },
+    ]);
+
+    setNewAdmin("");
   }
 
   function addEvent() {
@@ -368,7 +450,9 @@ export default function Home() {
       event,
     ]);
 
-    setSelectedEventId(event.id);
+    setSelectedEventId(
+      event.id
+    );
 
     setNewEvent((prev) => ({
       ...prev,
@@ -430,7 +514,10 @@ export default function Home() {
     const required =
       Number(newSlot.required);
 
-    if (!required || required < 1) {
+    if (
+      !required ||
+      required < 1
+    ) {
       alert(
         "必要人数を1以上で入力してください"
       );
@@ -533,9 +620,12 @@ export default function Home() {
     const shift =
       shifts[
         `${staffId}|${date}`
-      ] || emptyShift;
+      ] ||
+      emptyShift;
 
-    if (shift.status === "all") {
+    if (
+      shift.status === "all"
+    ) {
       return true;
     }
 
@@ -558,7 +648,8 @@ export default function Home() {
     const shift =
       shifts[
         `${staffId}|${date}`
-      ] || emptyShift;
+      ] ||
+      emptyShift;
 
     return (
       shift.status === "all" ||
@@ -619,7 +710,8 @@ export default function Home() {
   function assignedStaffIdsOnDate(
     date
   ) {
-    const ids = new Set();
+    const ids =
+      new Set();
 
     for (
       const event of events.filter(
@@ -641,40 +733,45 @@ export default function Home() {
     return ids;
   }
 
-  const offRows = days
-    .map((date) => {
-      const assigned =
-        assignedStaffIdsOnDate(
-          date
-        );
+  const offRows =
+    days
+      .map((date) => {
+        const assigned =
+          assignedStaffIdsOnDate(
+            date
+          );
 
-      return {
-        date,
+        return {
+          date,
 
-        people:
-          staff.filter(
-            (person) =>
-              !assigned.has(
-                person.id
-              )
-          ),
-      };
-    })
-    .filter(
-      (row) =>
-        row.people.length > 0
-    );
+          people:
+            staff.filter(
+              (person) =>
+                !assigned.has(
+                  person.id
+                )
+            ),
+        };
+      })
+      .filter(
+        (row) =>
+          row.people.length > 0
+      );
 
   return (
     <main>
+
       <style jsx global>{`
+
         * {
           box-sizing: border-box;
         }
 
         body {
           margin: 0;
+
           background: #f5f6f8;
+
           color: #1f2937;
 
           font-family:
@@ -697,9 +794,11 @@ export default function Home() {
 
         .topbar {
           background: #111827;
+
           color: white;
 
-          padding: 16px 22px;
+          padding:
+            15px 20px;
 
           display: flex;
 
@@ -708,20 +807,22 @@ export default function Home() {
 
           align-items: center;
 
-          gap: 14px;
+          gap: 12px;
         }
 
         .brand h1 {
           margin: 0;
-          font-size: 21px;
+
+          font-size: 20px;
         }
 
         .brand p {
-          margin: 3px 0 0;
-
-          font-size: 11px;
+          margin:
+            3px 0 0;
 
           color: #9ca3af;
+
+          font-size: 11px;
         }
 
         .month {
@@ -729,7 +830,8 @@ export default function Home() {
 
           border-radius: 8px;
 
-          padding: 9px 11px;
+          padding:
+            9px 11px;
 
           background: white;
         }
@@ -743,11 +845,12 @@ export default function Home() {
 
           display: flex;
 
-          gap: 7px;
+          gap: 6px;
 
           flex-wrap: wrap;
 
-          padding: 11px 16px;
+          padding:
+            10px 14px;
 
           background: white;
 
@@ -762,7 +865,8 @@ export default function Home() {
 
           background: #eef0f3;
 
-          padding: 9px 13px;
+          padding:
+            8px 12px;
 
           font-weight: 700;
         }
@@ -774,11 +878,11 @@ export default function Home() {
         }
 
         .content {
-          max-width: 1800px;
+          max-width: 1900px;
 
           margin: auto;
 
-          padding: 16px;
+          padding: 14px;
         }
 
         .card {
@@ -789,35 +893,20 @@ export default function Home() {
 
           border-radius: 12px;
 
-          padding: 16px;
+          padding: 15px;
 
           margin-bottom: 14px;
         }
 
-        .titleRow {
-          display: flex;
-
-          justify-content:
-            space-between;
-
-          align-items: center;
-
-          gap: 10px;
-
-          flex-wrap: wrap;
-
-          margin-bottom: 12px;
-        }
-
-        .titleRow h2,
-        .card h3 {
-          margin: 0;
+        h2,
+        h3 {
+          margin-top: 0;
         }
 
         .muted {
           color: #6b7280;
 
-          font-size: 12px;
+          font-size: 11px;
         }
 
         .primary {
@@ -829,7 +918,8 @@ export default function Home() {
 
           color: white;
 
-          padding: 9px 13px;
+          padding:
+            9px 13px;
 
           font-weight: 700;
         }
@@ -843,7 +933,8 @@ export default function Home() {
 
           color: #b91c1c;
 
-          padding: 8px 11px;
+          padding:
+            8px 11px;
 
           font-weight: 700;
         }
@@ -851,17 +942,15 @@ export default function Home() {
         .formRow {
           display: flex;
 
-          gap: 8px;
-
           flex-wrap: wrap;
+
+          gap: 8px;
 
           align-items: center;
         }
 
-        .formRow input,
-        .formRow select,
-        .editForm input,
-        .editForm select {
+        input,
+        select {
           border:
             1px solid #d1d5db;
 
@@ -876,9 +965,9 @@ export default function Home() {
           overflow: auto;
 
           height:
-            calc(100vh - 190px);
+            calc(100vh - 180px);
 
-          min-height: 520px;
+          min-height: 500px;
 
           border:
             1px solid #dfe3e8;
@@ -897,10 +986,6 @@ export default function Home() {
           width: max-content;
 
           min-width: 100%;
-
-          table-layout: fixed;
-
-          background: white;
         }
 
         .shiftTable th,
@@ -911,13 +996,11 @@ export default function Home() {
           border-bottom:
             1px solid #e5e7eb;
 
-          padding: 4px;
+          padding: 3px;
 
           text-align: center;
 
           vertical-align: middle;
-
-          height: 46px;
         }
 
         .shiftTable th {
@@ -931,17 +1014,20 @@ export default function Home() {
         }
 
         .dateHead {
-          position: sticky !important;
+          position:
+            sticky !important;
 
           left: 0;
 
-          z-index: 12 !important;
+          z-index:
+            15 !important;
 
-          min-width: 190px;
+          width: 180px;
 
-          width: 190px;
+          min-width: 180px;
 
-          text-align: left !important;
+          text-align:
+            left !important;
         }
 
         .dateCell {
@@ -951,86 +1037,91 @@ export default function Home() {
 
           z-index: 6;
 
-          min-width: 190px;
+          width: 180px;
 
-          width: 190px;
+          min-width: 180px;
 
           background: white;
 
-          text-align: left !important;
+          text-align:
+            left !important;
 
-          padding: 7px 9px !important;
+          padding:
+            6px 8px !important;
         }
 
         .dateTop {
           display: flex;
 
-          align-items: baseline;
-
           justify-content:
             space-between;
 
-          gap: 8px;
+          gap: 6px;
         }
 
         .availableCount {
-          font-size: 11px;
-
-          font-weight: 800;
+          font-size: 10px;
 
           color: #166534;
 
-          white-space: nowrap;
+          font-weight: 800;
         }
 
         .eventMini {
-          margin-top: 5px;
+          margin-top: 4px;
 
-          padding: 5px 6px;
+          padding: 4px;
 
-          border-radius: 6px;
+          border-radius: 5px;
 
           background: #eff6ff;
 
-          font-size: 10px;
+          font-size: 9px;
         }
 
         .personHead {
-          min-width: 104px;
+          width: 80px;
 
-          width: 104px;
+          min-width: 80px;
 
-          max-width: 104px;
+          max-width: 80px;
 
-          padding: 6px 4px !important;
+          padding:
+            5px 2px !important;
         }
 
         .personName {
-          display: block;
+          display:
+            -webkit-box;
 
-          font-size: 12px;
+          -webkit-line-clamp: 2;
 
-          white-space: nowrap;
+          -webkit-box-orient:
+            vertical;
 
           overflow: hidden;
 
-          text-overflow: ellipsis;
+          font-size: 10px;
+
+          line-height: 1.2;
+
+          word-break: break-all;
         }
 
         .personMeta {
-          font-size: 9px;
+          margin-top: 2px;
+
+          font-size: 8px;
 
           color: #6b7280;
-
-          margin-top: 2px;
         }
 
         .shiftCell {
-          min-width: 104px;
+          width: 80px;
 
-          width: 104px;
+          min-width: 80px;
 
-          padding: 3px !important;
+          max-width: 80px;
         }
 
         .cellButton {
@@ -1042,9 +1133,11 @@ export default function Home() {
 
           border-radius: 6px;
 
-          font-size: 11px;
-
           font-weight: 800;
+
+          font-size: 13px;
+
+          position: relative;
         }
 
         .statusAll {
@@ -1069,6 +1162,24 @@ export default function Home() {
           color: #6b7280;
         }
 
+        .negotiatedMark {
+          display: block;
+
+          margin-top: 1px;
+
+          font-size: 7px;
+
+          line-height: 1.1;
+
+          color: #374151;
+
+          overflow: hidden;
+
+          white-space: nowrap;
+
+          text-overflow: ellipsis;
+        }
+
         .modalBack {
           position: fixed;
 
@@ -1085,12 +1196,20 @@ export default function Home() {
           padding: 18px;
 
           background:
-            rgba(17,24,39,.45);
+            rgba(
+              17,
+              24,
+              39,
+              .48
+            );
         }
 
         .modal {
           width:
-            min(440px,100%);
+            min(
+              460px,
+              100%
+            );
 
           background: white;
 
@@ -1106,83 +1225,107 @@ export default function Home() {
             space-between;
 
           gap: 12px;
-
-          margin-bottom: 14px;
-        }
-
-        .modalHeader h3 {
-          margin: 0;
         }
 
         .closeBtn {
           border: 0;
 
+          border-radius: 8px;
+
           background: #eef0f3;
 
-          border-radius: 8px;
-
-          padding: 7px 10px;
+          padding:
+            7px 10px;
         }
 
-        .modal select {
+        .modalField {
+          margin-top: 14px;
+        }
+
+        .modalField label {
+          display: block;
+
+          margin-bottom: 5px;
+
+          font-size: 12px;
+
+          font-weight: 800;
+        }
+
+        .modalField select {
           width: 100%;
+        }
+
+        .negotiationBox {
+          margin-top: 16px;
+
+          padding: 13px;
+
+          border-radius: 10px;
+
+          background: #f9fafb;
 
           border:
-            1px solid #d1d5db;
+            1px solid #e5e7eb;
+        }
 
-          border-radius: 8px;
+        .checkRow {
+          display: flex;
 
-          padding: 10px;
+          gap: 8px;
 
-          margin-top: 8px;
+          align-items: center;
 
-          background: white;
+          font-weight: 800;
+        }
+
+        .checkRow input {
+          width: 18px;
+
+          height: 18px;
         }
 
         .eventLayout {
           display: grid;
 
           grid-template-columns:
-            310px minmax(0,1fr);
+            300px
+            minmax(0, 1fr);
 
           gap: 14px;
         }
 
-        .eventList {
-          max-height:
-            calc(100vh - 180px);
-
-          overflow: auto;
-        }
-
         .eventList button {
           width: 100%;
+
+          margin-bottom: 7px;
+
+          padding: 10px;
 
           text-align: left;
 
           border:
             1px solid #e5e7eb;
 
+          border-radius: 8px;
+
           background: white;
-
-          border-radius: 9px;
-
-          padding: 11px;
-
-          margin-bottom: 7px;
         }
 
         .eventList button.selected {
-          border-color: #2563eb;
-
           background: #eff6ff;
+
+          border-color: #2563eb;
         }
 
         .editForm {
           display: grid;
 
           grid-template-columns:
-            150px 1fr 1fr auto;
+            150px
+            1fr
+            1fr
+            auto;
 
           gap: 8px;
         }
@@ -1202,34 +1345,23 @@ export default function Home() {
           display: grid;
 
           grid-template-columns:
-            130px 120px 120px auto;
+            130px
+            110px
+            100px
+            auto;
 
-          gap: 8px;
-        }
-
-        .slotEdit select,
-        .slotEdit input {
-          width: 100%;
-
-          border:
-            1px solid #d1d5db;
-
-          border-radius: 8px;
-
-          padding: 8px;
-
-          background: white;
+          gap: 7px;
         }
 
         .slotStats {
+          margin-top: 8px;
+
           display: flex;
 
           justify-content:
             space-between;
 
-          gap: 12px;
-
-          margin-top: 9px;
+          gap: 10px;
 
           flex-wrap: wrap;
         }
@@ -1252,7 +1384,10 @@ export default function Home() {
           grid-template-columns:
             repeat(
               auto-fill,
-              minmax(160px,1fr)
+              minmax(
+                140px,
+                1fr
+              )
             );
 
           gap: 7px;
@@ -1264,9 +1399,9 @@ export default function Home() {
           border:
             1px solid #d1d5db;
 
-          background: white;
-
           border-radius: 8px;
+
+          background: white;
 
           padding: 9px;
 
@@ -1279,36 +1414,45 @@ export default function Home() {
           border-color: #86efac;
         }
 
-        .staffGrid {
+        .staffGrid,
+        .adminGrid {
           display: grid;
 
           grid-template-columns:
             repeat(
               auto-fill,
-              minmax(240px,1fr)
+              minmax(
+                230px,
+                1fr
+              )
             );
 
           gap: 9px;
         }
 
-        .staffCard {
-          border:
-            1px solid #e5e7eb;
-
-          border-radius: 10px;
-
-          padding: 12px;
-
+        .staffCard,
+        .adminCard {
           display: flex;
 
           justify-content:
             space-between;
 
           align-items: center;
+
+          gap: 10px;
+
+          padding: 11px;
+
+          border:
+            1px solid #e5e7eb;
+
+          border-radius: 9px;
+
+          background: white;
         }
 
         .offDate {
-          margin-bottom: 13px;
+          margin-bottom: 14px;
         }
 
         .offList {
@@ -1316,26 +1460,28 @@ export default function Home() {
 
           flex-wrap: wrap;
 
-          gap: 7px;
+          gap: 6px;
 
-          margin-top: 7px;
+          margin-top: 6px;
         }
 
         .offChip {
-          background: #f3f4f6;
+          padding:
+            6px 9px;
 
           border-radius: 999px;
 
-          padding: 6px 9px;
+          background: #f3f4f6;
 
-          font-size: 12px;
+          font-size: 11px;
         }
 
         @media (
           max-width: 900px
         ) {
+
           .content {
-            padding: 10px;
+            padding: 9px;
           }
 
           .eventLayout {
@@ -1351,21 +1497,36 @@ export default function Home() {
 
           .dateHead,
           .dateCell {
-            min-width: 160px;
+            width: 150px;
 
-            width: 160px;
+            min-width: 150px;
+          }
+
+          .personHead,
+          .shiftCell {
+            width: 72px;
+
+            min-width: 72px;
+
+            max-width: 72px;
           }
         }
+
       `}</style>
 
       <header className="topbar">
+
         <div className="brand">
-          <h1>SHIFT BOARD</h1>
+
+          <h1>
+            SHIFT BOARD
+          </h1>
 
           <p>
             イベントスタッフ
             シフト・配置管理
           </p>
+
         </div>
 
         <input
@@ -1373,98 +1534,139 @@ export default function Home() {
           type="month"
           value={month}
           onChange={(e) =>
-            setMonth(e.target.value)
+            setMonth(
+              e.target.value
+            )
           }
         />
+
       </header>
 
       <nav className="tabs">
+
         {[
-          ["board", "月間シフト"],
+          [
+            "board",
+            "月間シフト",
+          ],
+
           [
             "events",
             "現場管理・配置",
           ],
-          ["off", "OFF一覧"],
-          ["staff", "スタッフ管理"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            className={`tab ${
-              tab === id
-                ? "active"
-                : ""
-            }`}
-            onClick={() =>
-              setTab(id)
-            }
-          >
-            {label}
-          </button>
-        ))}
+
+          [
+            "off",
+            "OFF一覧",
+          ],
+
+          [
+            "staff",
+            "スタッフ管理",
+          ],
+
+          [
+            "admins",
+            "管理者管理",
+          ],
+        ].map(
+          ([id, label]) => (
+
+            <button
+              key={id}
+              className={`tab ${
+                tab === id
+                  ? "active"
+                  : ""
+              }`}
+              onClick={() =>
+                setTab(id)
+              }
+            >
+              {label}
+            </button>
+
+          )
+        )}
+
       </nav>
 
       <div className="content">
 
         {tab === "board" && (
           <>
-            <div className="titleRow">
-              <div>
-                <h2>
-                  {month.replace(
-                    "-",
-                    "年"
-                  )}
-                  月 シフト表
-                </h2>
 
-                <div className="muted">
-                  マスをクリックすると編集できます
-                </div>
-              </div>
-            </div>
+            <h2>
+              {month.replace(
+                "-",
+                "年"
+              )}
+              月 シフト表
+            </h2>
 
             <div className="boardWrap">
+
               <table className="shiftTable">
+
                 <thead>
+
                   <tr>
+
                     <th className="dateHead">
                       日付・現場
                     </th>
 
                     {staff.map(
                       (person) => (
+
                         <th
-                          className="personHead"
-                          key={person.id}
-                          title={
-                            person.name
+                          key={
+                            person.id
                           }
+                          className="personHead"
                         >
+
                           <span className="personName">
-                            {person.name}
+                            {
+                              person.name
+                            }
                           </span>
 
                           <div className="personMeta">
+
                             {person.grade ===
                             "F"
                               ? "F"
-                              : `${person.grade}年`}{" "}
-                            / R
-                            {person.rank}
+                              : `${person.grade}年`}
+
+                            {" / "}
+
+                            R
+                            {
+                              person.rank
+                            }
+
                           </div>
+
                         </th>
+
                       )
                     )}
+
                   </tr>
+
                 </thead>
 
                 <tbody>
+
                   {days.map(
                     (date) => {
+
                       const availablePeople =
                         staff.filter(
-                          (person) =>
+                          (
+                            person
+                          ) =>
                             canWorkOnDate(
                               person.id,
                               date
@@ -1473,7 +1675,9 @@ export default function Home() {
 
                       const allCount =
                         availablePeople.filter(
-                          (person) =>
+                          (
+                            person
+                          ) =>
                             (
                               shifts[
                                 `${person.id}|${date}`
@@ -1488,10 +1692,13 @@ export default function Home() {
                         allCount;
 
                       return (
+
                         <tr key={date}>
 
                           <td className="dateCell">
+
                             <div className="dateTop">
+
                               <strong>
                                 {date
                                   .slice(5)
@@ -1502,19 +1709,27 @@ export default function Home() {
                               </strong>
 
                               <span className="availableCount">
+
                                 稼働可能{" "}
                                 {
                                   availablePeople.length
                                 }
                                 人
+
                               </span>
+
                             </div>
 
                             <div className="muted">
-                              終日{" "}
-                              {allCount} /
-                              時間指定{" "}
+
+                              ⭕️{" "}
+                              {allCount}
+
+                              {" / "}
+
+                              時間{" "}
                               {timeCount}
+
                             </div>
 
                             {(
@@ -1523,28 +1738,32 @@ export default function Home() {
                               ] || []
                             ).map(
                               (event) => (
+
                                 <div
                                   className="eventMini"
                                   key={
                                     event.id
                                   }
                                 >
+
                                   <strong>
                                     {
                                       event.eventName
                                     }
                                   </strong>
-                                  ｜
-                                  {
-                                    event.venueName
-                                  }
+
                                 </div>
+
                               )
                             )}
+
                           </td>
 
                           {staff.map(
-                            (person) => {
+                            (
+                              person
+                            ) => {
+
                               const key =
                                 `${person.id}|${date}`;
 
@@ -1554,15 +1773,26 @@ export default function Home() {
                                 ] ||
                                 emptyShift;
 
+                              const admin =
+                                admins.find(
+                                  (
+                                    admin
+                                  ) =>
+                                    admin.id ===
+                                    shift.negotiatedBy
+                                );
+
                               return (
+
                                 <td
-                                  className="shiftCell"
                                   key={
                                     person.id
                                   }
+                                  className="shiftCell"
                                 >
+
                                   <button
-                                    className={`cellButton ${shiftClass(
+                                    className={`cellButton ${statusClass(
                                       shift.status
                                     )}`}
                                     onClick={() =>
@@ -1576,26 +1806,52 @@ export default function Home() {
                                       )
                                     }
                                   >
-                                    {compactLabel(
-                                      shift
+
+                                    <span>
+                                      {compactLabel(
+                                        shift
+                                      )}
+                                    </span>
+
+                                    {shift.negotiated && (
+
+                                      <span className="negotiatedMark">
+
+                                        交渉済
+                                        {admin
+                                          ? `:${admin.name}`
+                                          : ""}
+
+                                      </span>
+
                                     )}
+
                                   </button>
+
                                 </td>
+
                               );
                             }
                           )}
+
                         </tr>
+
                       );
                     }
                   )}
+
                 </tbody>
+
               </table>
+
             </div>
+
           </>
         )}
 
         {editingCell &&
           (() => {
+
             const person =
               staff.find(
                 (p) =>
@@ -1611,6 +1867,7 @@ export default function Home() {
               emptyShift;
 
             return (
+
               <div
                 className="modalBack"
                 onClick={() =>
@@ -1619,14 +1876,18 @@ export default function Home() {
                   )
                 }
               >
+
                 <div
                   className="modal"
                   onClick={(e) =>
                     e.stopPropagation()
                   }
                 >
+
                   <div className="modalHeader">
+
                     <div>
+
                       <h3>
                         {person?.name}
                       </h3>
@@ -1636,6 +1897,7 @@ export default function Home() {
                           editingCell.date
                         }
                       </div>
+
                     </div>
 
                     <button
@@ -1648,142 +1910,217 @@ export default function Home() {
                     >
                       閉じる
                     </button>
+
                   </div>
 
-                  <select
-                    value={
-                      shift.status
-                    }
-                    onChange={(e) => {
-                      const status =
-                        e.target.value;
+                  <div className="modalField">
 
-                      setShift(
-                        editingCell.staffId,
-                        editingCell.date,
-                        {
-                          status,
+                    <label>
+                      勤務状況
+                    </label>
 
-                          startHour:
-                            status ===
-                            "time"
-                              ? shift.startHour ||
-                                "09:00"
-                              : "",
-
-                          negotiation:
-                            status ===
-                            "undecided"
-                              ? "pending"
-                              : "none",
-                        }
-                      );
-                    }}
-                  >
-                    <option value="none">
-                      未提出
-                    </option>
-
-                    <option value="all">
-                      終日勤務可能
-                    </option>
-
-                    <option value="time">
-                      時間指定
-                    </option>
-
-                    <option value="undecided">
-                      未定
-                    </option>
-
-                    <option value="off">
-                      勤務不可
-                    </option>
-                  </select>
-
-                  {shift.status ===
-                    "time" && (
                     <select
                       value={
-                        shift.startHour ||
-                        "09:00"
+                        shift.status
                       }
-                      onChange={(e) =>
+                      onChange={(e) => {
+
+                        const status =
+                          e.target.value;
+
                         setShift(
                           editingCell.staffId,
                           editingCell.date,
                           {
-                            startHour:
-                              e.target
-                                .value,
-                          }
-                        )
-                      }
-                    >
-                      {HOURS.map(
-                        (hour) => (
-                          <option
-                            key={hour}
-                          >
-                            {hour}
-                          </option>
-                        )
-                      )}
-                    </select>
-                  )}
+                            status,
 
-                  {shift.status ===
-                    "undecided" && (
-                    <select
-                      value={
-                        shift.negotiation ||
-                        "pending"
-                      }
-                      onChange={(e) =>
-                        handleNegotiationResult(
-                          editingCell.staffId,
-                          editingCell.date,
-                          e.target.value
-                        )
-                      }
+                            startHour:
+                              status ===
+                              "time"
+                                ? shift.startHour ||
+                                  "09:00"
+                                : "",
+                          }
+                        );
+
+                      }}
                     >
-                      <option value="pending">
-                        交渉中 /
-                        未交渉
+
+                      <option value="none">
+                        未提出
                       </option>
 
                       <option value="all">
-                        交渉結果：
-                        終日OK
+                        ⭕️ 終日勤務可能
                       </option>
 
                       <option value="time">
-                        交渉結果：
                         時間指定
                       </option>
 
-                      <option value="off">
-                        交渉結果：
-                        勤務不可
+                      <option value="undecided">
+                        🔺 未定
                       </option>
+
+                      <option value="off">
+                        ❌ 勤務不可
+                      </option>
+
                     </select>
+
+                  </div>
+
+                  {shift.status ===
+                    "time" && (
+
+                    <div className="modalField">
+
+                      <label>
+                        勤務開始時間
+                      </label>
+
+                      <select
+                        value={
+                          shift.startHour ||
+                          "09:00"
+                        }
+                        onChange={(e) =>
+                          setShift(
+                            editingCell.staffId,
+                            editingCell.date,
+                            {
+                              startHour:
+                                e.target.value,
+                            }
+                          )
+                        }
+                      >
+
+                        {HOURS.map(
+                          (hour) => (
+
+                            <option
+                              key={
+                                hour
+                              }
+                            >
+                              {hour}
+                            </option>
+
+                          )
+                        )}
+
+                      </select>
+
+                    </div>
+
                   )}
+
+                  <div className="negotiationBox">
+
+                    <label className="checkRow">
+
+                      <input
+                        type="checkbox"
+                        checked={
+                          !!shift.negotiated
+                        }
+                        onChange={(e) =>
+                          setShift(
+                            editingCell.staffId,
+                            editingCell.date,
+                            {
+                              negotiated:
+                                e.target.checked,
+
+                              negotiatedBy:
+                                e.target.checked
+                                  ? shift.negotiatedBy
+                                  : "",
+                            }
+                          )
+                        }
+                      />
+
+                      交渉済み
+
+                    </label>
+
+                    {shift.negotiated && (
+
+                      <div className="modalField">
+
+                        <label>
+                          交渉した管理者
+                        </label>
+
+                        <select
+                          value={
+                            shift.negotiatedBy ||
+                            ""
+                          }
+                          onChange={(e) =>
+                            setShift(
+                              editingCell.staffId,
+                              editingCell.date,
+                              {
+                                negotiatedBy:
+                                  e.target.value,
+                              }
+                            )
+                          }
+                        >
+
+                          <option value="">
+                            選択してください
+                          </option>
+
+                          {admins.map(
+                            (admin) => (
+
+                              <option
+                                key={
+                                  admin.id
+                                }
+                                value={
+                                  admin.id
+                                }
+                              >
+                                {
+                                  admin.name
+                                }
+                              </option>
+
+                            )
+                          )}
+
+                        </select>
+
+                      </div>
+
+                    )}
+
+                  </div>
+
                 </div>
+
               </div>
+
             );
+
           })()}
 
         {tab === "events" && (
           <>
-            <div className="card">
-              <h2>現場登録</h2>
 
-              <div
-                className="formRow"
-                style={{
-                  marginTop: 12,
-                }}
-              >
+            <div className="card">
+
+              <h2>
+                現場登録
+              </h2>
+
+              <div className="formRow">
+
                 <input
                   type="date"
                   value={
@@ -1828,79 +2165,96 @@ export default function Home() {
 
                 <button
                   className="primary"
-                  onClick={addEvent}
+                  onClick={
+                    addEvent
+                  }
                 >
                   現場を追加
                 </button>
+
               </div>
+
             </div>
 
             <div className="eventLayout">
 
               <div className="card eventList">
+
                 <h3>
                   登録現場
                 </h3>
 
                 {events
                   .slice()
-                  .sort((a, b) =>
-                    a.date.localeCompare(
-                      b.date
-                    )
+                  .sort(
+                    (a, b) =>
+                      a.date.localeCompare(
+                        b.date
+                      )
                   )
-                  .map((event) => (
-                    <button
-                      key={event.id}
-                      className={
-                        selectedEvent?.id ===
-                        event.id
-                          ? "selected"
-                          : ""
-                      }
-                      onClick={() =>
-                        setSelectedEventId(
-                          event.id
-                        )
-                      }
-                    >
-                      <strong>
-                        {event.date
-                          .slice(5)
-                          .replace(
-                            "-",
-                            "/"
-                          )}{" "}
-                        {
-                          event.eventName
-                        }
-                      </strong>
+                  .map(
+                    (event) => (
 
-                      <div className="muted">
-                        {
-                          event.venueName
+                      <button
+                        key={
+                          event.id
                         }
-                      </div>
-                    </button>
-                  ))}
+                        className={
+                          selectedEvent?.id ===
+                          event.id
+                            ? "selected"
+                            : ""
+                        }
+                        onClick={() =>
+                          setSelectedEventId(
+                            event.id
+                          )
+                        }
+                      >
+
+                        <strong>
+
+                          {event.date
+                            .slice(5)
+                            .replace(
+                              "-",
+                              "/"
+                            )}
+
+                          {" "}
+
+                          {
+                            event.eventName
+                          }
+
+                        </strong>
+
+                        <div className="muted">
+                          {
+                            event.venueName
+                          }
+                        </div>
+
+                      </button>
+
+                    )
+                  )}
+
               </div>
 
               <div>
+
                 {selectedEvent && (
                   <>
 
                     <div className="card">
 
-                      <h2>
-                        現場情報の編集
-                      </h2>
+                      <h3>
+                        現場情報編集
+                      </h3>
 
-                      <div
-                        className="editForm"
-                        style={{
-                          marginTop: 12,
-                        }}
-                      >
+                      <div className="editForm">
+
                         <input
                           type="date"
                           value={
@@ -1951,7 +2305,9 @@ export default function Home() {
                         >
                           現場削除
                         </button>
+
                       </div>
+
                     </div>
 
                     <div className="card">
@@ -1960,12 +2316,8 @@ export default function Home() {
                         セクション追加
                       </h3>
 
-                      <div
-                        className="formRow"
-                        style={{
-                          marginTop: 10,
-                        }}
-                      >
+                      <div className="formRow">
+
                         <select
                           value={
                             newSlot.section
@@ -1978,8 +2330,10 @@ export default function Home() {
                             })
                           }
                         >
+
                           {SECTIONS.map(
                             (section) => (
+
                               <option
                                 key={
                                   section
@@ -1987,8 +2341,10 @@ export default function Home() {
                               >
                                 {section}
                               </option>
+
                             )
                           )}
+
                         </select>
 
                         <select
@@ -2003,15 +2359,21 @@ export default function Home() {
                             })
                           }
                         >
+
                           {HOURS.map(
                             (hour) => (
+
                               <option
-                                key={hour}
+                                key={
+                                  hour
+                                }
                               >
                                 {hour}
                               </option>
+
                             )
                           )}
+
                         </select>
 
                         <input
@@ -2037,265 +2399,314 @@ export default function Home() {
                         >
                           追加
                         </button>
+
                       </div>
+
                     </div>
 
                     <div className="card">
 
-                      <h3>配置</h3>
+                      <h3>
+                        配置
+                      </h3>
 
                       {selectedEvent.slots
                         .slice()
-                        .sort((a, b) =>
-                          a.time.localeCompare(
-                            b.time
-                          )
+                        .sort(
+                          (a, b) =>
+                            a.time.localeCompare(
+                              b.time
+                            )
                         )
-                        .map((slot) => {
+                        .map(
+                          (slot) => {
 
-                          const availableStaff =
-                            staff.filter(
-                              (person) =>
-                                canWork(
-                                  person.id,
-                                  selectedEvent.date,
-                                  slot.time
-                                )
-                            );
-
-                          const shortage =
-                            Math.max(
-                              0,
-                              slot.required -
-                                slot.assigned
-                                  .length
-                            );
-
-                          return (
-                            <div
-                              className="slot"
-                              key={
-                                slot.id
-                              }
-                            >
-
-                              <div className="slotEdit">
-
-                                <select
-                                  value={
-                                    slot.section
-                                  }
-                                  onChange={(e) =>
-                                    updateSlot(
-                                      selectedEvent.id,
-                                      slot.id,
-                                      {
-                                        section:
-                                          e.target.value,
-                                      }
-                                    )
-                                  }
-                                >
-                                  {SECTIONS.map(
-                                    (
-                                      section
-                                    ) => (
-                                      <option
-                                        key={
-                                          section
-                                        }
-                                      >
-                                        {
-                                          section
-                                        }
-                                      </option>
-                                    )
-                                  )}
-                                </select>
-
-                                <select
-                                  value={
+                            const availableStaff =
+                              staff.filter(
+                                (
+                                  person
+                                ) =>
+                                  canWork(
+                                    person.id,
+                                    selectedEvent.date,
                                     slot.time
-                                  }
-                                  onChange={(e) =>
-                                    updateSlot(
-                                      selectedEvent.id,
-                                      slot.id,
-                                      {
-                                        time:
-                                          e.target.value,
-                                      }
-                                    )
-                                  }
-                                >
-                                  {HOURS.map(
-                                    (hour) => (
-                                      <option
-                                        key={
-                                          hour
-                                        }
-                                      >
+                                  )
+                              );
+
+                            const shortage =
+                              Math.max(
+                                0,
+                                slot.required -
+                                  slot.assigned.length
+                              );
+
+                            return (
+
+                              <div
+                                className="slot"
+                                key={
+                                  slot.id
+                                }
+                              >
+
+                                <div className="slotEdit">
+
+                                  <select
+                                    value={
+                                      slot.section
+                                    }
+                                    onChange={(e) =>
+                                      updateSlot(
+                                        selectedEvent.id,
+                                        slot.id,
                                         {
-                                          hour
+                                          section:
+                                            e.target.value,
                                         }
-                                      </option>
-                                    )
-                                  )}
-                                </select>
+                                      )
+                                    }
+                                  >
 
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={
-                                    slot.required
-                                  }
-                                  onChange={(e) =>
-                                    updateSlot(
-                                      selectedEvent.id,
-                                      slot.id,
-                                      {
-                                        required:
-                                          Number(
-                                            e.target.value
-                                          ) ||
-                                          1,
-                                      }
-                                    )
-                                  }
-                                />
+                                    {SECTIONS.map(
+                                      (
+                                        section
+                                      ) => (
 
-                                <button
-                                  className="danger"
-                                  onClick={() =>
-                                    deleteSlot(
-                                      selectedEvent.id,
-                                      slot.id
-                                    )
-                                  }
-                                >
-                                  削除
-                                </button>
-                              </div>
+                                        <option
+                                          key={
+                                            section
+                                          }
+                                        >
+                                          {
+                                            section
+                                          }
+                                        </option>
 
-                              <div className="slotStats">
+                                      )
+                                    )}
 
-                                <div className="muted">
-                                  稼働可能{" "}
-                                  {
-                                    availableStaff.length
-                                  }
-                                  人 /
-                                  必要{" "}
-                                  {
-                                    slot.required
-                                  }
-                                  人 /
-                                  配置{" "}
-                                  {
-                                    slot.assigned.length
-                                  }
-                                  人
+                                  </select>
+
+                                  <select
+                                    value={
+                                      slot.time
+                                    }
+                                    onChange={(e) =>
+                                      updateSlot(
+                                        selectedEvent.id,
+                                        slot.id,
+                                        {
+                                          time:
+                                            e.target.value,
+                                        }
+                                      )
+                                    }
+                                  >
+
+                                    {HOURS.map(
+                                      (
+                                        hour
+                                      ) => (
+
+                                        <option
+                                          key={
+                                            hour
+                                          }
+                                        >
+                                          {
+                                            hour
+                                          }
+                                        </option>
+
+                                      )
+                                    )}
+
+                                  </select>
+
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={
+                                      slot.required
+                                    }
+                                    onChange={(e) =>
+                                      updateSlot(
+                                        selectedEvent.id,
+                                        slot.id,
+                                        {
+                                          required:
+                                            Number(
+                                              e.target.value
+                                            ) ||
+                                            1,
+                                        }
+                                      )
+                                    }
+                                  />
+
+                                  <button
+                                    className="danger"
+                                    onClick={() =>
+                                      deleteSlot(
+                                        selectedEvent.id,
+                                        slot.id
+                                      )
+                                    }
+                                  >
+                                    削除
+                                  </button>
+
                                 </div>
 
-                                <span
-                                  className={
-                                    shortage >
+                                <div className="slotStats">
+
+                                  <span className="muted">
+
+                                    稼働可能{" "}
+                                    {
+                                      availableStaff.length
+                                    }
+                                    人
+
+                                    {" / "}
+
+                                    必要{" "}
+                                    {
+                                      slot.required
+                                    }
+                                    人
+
+                                    {" / "}
+
+                                    配置{" "}
+                                    {
+                                      slot.assigned.length
+                                    }
+                                    人
+
+                                  </span>
+
+                                  <strong
+                                    className={
+                                      shortage >
+                                      0
+                                        ? "shortage"
+                                        : "ok"
+                                    }
+                                  >
+
+                                    {shortage >
                                     0
-                                      ? "shortage"
-                                      : "ok"
-                                  }
-                                >
-                                  {shortage >
-                                  0
-                                    ? `あと${shortage}人不足`
-                                    : "充足"}
-                                </span>
-                              </div>
+                                      ? `あと${shortage}人不足`
+                                      : "充足"}
 
-                              <div className="candidateGrid">
+                                  </strong>
 
-                                {availableStaff.map(
-                                  (
-                                    person
-                                  ) => {
+                                </div>
 
-                                    const assigned =
-                                      slot.assigned.includes(
-                                        person.id
-                                      );
+                                <div className="candidateGrid">
 
-                                    const shift =
-                                      shifts[
-                                        `${person.id}|${selectedEvent.date}`
-                                      ] ||
-                                      emptyShift;
+                                  {availableStaff.map(
+                                    (
+                                      person
+                                    ) => {
 
-                                    return (
-                                      <button
-                                        key={
+                                      const assigned =
+                                        slot.assigned.includes(
                                           person.id
-                                        }
-                                        className={`candidate ${
-                                          assigned
-                                            ? "assigned"
-                                            : ""
-                                        }`}
-                                        onClick={() =>
-                                          toggleAssignment(
-                                            selectedEvent.id,
-                                            slot.id,
+                                        );
+
+                                      const shift =
+                                        shifts[
+                                          `${person.id}|${selectedEvent.date}`
+                                        ] ||
+                                        emptyShift;
+
+                                      return (
+
+                                        <button
+                                          key={
                                             person.id
-                                          )
-                                        }
-                                      >
-                                        <strong>
-                                          {
-                                            person.name
                                           }
-                                        </strong>
+                                          className={`candidate ${
+                                            assigned
+                                              ? "assigned"
+                                              : ""
+                                          }`}
+                                          onClick={() =>
+                                            toggleAssignment(
+                                              selectedEvent.id,
+                                              slot.id,
+                                              person.id
+                                            )
+                                          }
+                                        >
 
-                                        <div className="muted">
-                                          {availabilityLabel(
-                                            shift
-                                          )}
-                                        </div>
+                                          <strong>
+                                            {
+                                              person.name
+                                            }
+                                          </strong>
 
-                                        {assigned && (
-                                          <div>
-                                            ✓
-                                            配置済み
+                                          <div className="muted">
+                                            {availabilityLabel(
+                                              shift
+                                            )}
                                           </div>
-                                        )}
-                                      </button>
-                                    );
-                                  }
-                                )}
+
+                                          {assigned && (
+                                            <div>
+                                              ✓ 配置済み
+                                            </div>
+                                          )}
+
+                                        </button>
+
+                                      );
+                                    }
+                                  )}
+
+                                </div>
+
                               </div>
-                            </div>
-                          );
-                        })}
+
+                            );
+                          }
+                        )}
+
                     </div>
+
                   </>
                 )}
+
               </div>
+
             </div>
+
           </>
         )}
 
         {tab === "off" && (
+
           <div className="card">
 
-            <h2>OFF一覧</h2>
+            <h2>
+              OFF一覧
+            </h2>
 
             {offRows.map(
               ({
                 date,
                 people,
               }) => (
+
                 <div
                   className="offDate"
-                  key={date}
+                  key={
+                    date
+                  }
                 >
+
                   <strong>
                     {date
                       .slice(5)
@@ -2306,8 +2717,11 @@ export default function Home() {
                   </strong>
 
                   <div className="offList">
+
                     {people.map(
-                      (person) => {
+                      (
+                        person
+                      ) => {
 
                         const shift =
                           shifts[
@@ -2316,44 +2730,52 @@ export default function Home() {
                           emptyShift;
 
                         return (
+
                           <span
                             className="offChip"
                             key={
                               person.id
                             }
                           >
+
                             {
                               person.name
                             }
+
                             ｜
+
                             {availabilityLabel(
                               shift
                             )}
+
                           </span>
+
                         );
                       }
                     )}
+
                   </div>
+
                 </div>
+
               )
             )}
+
           </div>
+
         )}
 
         {tab === "staff" && (
           <>
+
             <div className="card">
 
               <h2>
                 スタッフ管理
               </h2>
 
-              <div
-                className="formRow"
-                style={{
-                  marginTop: 12,
-                }}
-              >
+              <div className="formRow">
+
                 <input
                   placeholder="名前"
                   value={
@@ -2380,6 +2802,7 @@ export default function Home() {
                     })
                   }
                 >
+
                   <option value="1">
                     1年
                   </option>
@@ -2399,6 +2822,7 @@ export default function Home() {
                   <option value="F">
                     F
                   </option>
+
                 </select>
 
                 <select
@@ -2413,6 +2837,7 @@ export default function Home() {
                     })
                   }
                 >
+
                   <option value="無">
                     無
                   </option>
@@ -2432,6 +2857,7 @@ export default function Home() {
                   <option value="4">
                     4
                   </option>
+
                 </select>
 
                 <select
@@ -2446,6 +2872,7 @@ export default function Home() {
                     })
                   }
                 >
+
                   <option>
                     男性
                   </option>
@@ -2457,28 +2884,36 @@ export default function Home() {
                   <option>
                     その他
                   </option>
+
                 </select>
 
                 <button
                   className="primary"
-                  onClick={addStaff}
+                  onClick={
+                    addStaff
+                  }
                 >
                   追加
                 </button>
+
               </div>
+
             </div>
 
             <div className="staffGrid">
 
               {staff.map(
                 (person) => (
+
                   <div
                     className="staffCard"
                     key={
                       person.id
                     }
                   >
+
                     <div>
+
                       <strong>
                         {
                           person.name
@@ -2486,26 +2921,30 @@ export default function Home() {
                       </strong>
 
                       <div className="muted">
+
                         {person.grade ===
                         "F"
                           ? "F"
-                          : `${person.grade}年`}{" "}
-                        / ランク{" "}
+                          : `${person.grade}年`}
+
+                        {" / "}
+
+                        ランク{" "}
                         {
                           person.rank
-                        }{" "}
-                        /{" "}
-                        {
-                          person.gender
                         }
+
                       </div>
+
                     </div>
 
                     <button
                       className="danger"
                       onClick={() =>
                         setStaff(
-                          (prev) =>
+                          (
+                            prev
+                          ) =>
                             prev.filter(
                               (
                                 member
@@ -2518,13 +2957,112 @@ export default function Home() {
                     >
                       削除
                     </button>
+
                   </div>
+
                 )
               )}
+
             </div>
+
           </>
         )}
+
+        {tab === "admins" && (
+          <>
+
+            <div className="card">
+
+              <h2>
+                管理者管理
+              </h2>
+
+              <div className="muted">
+                交渉担当者として選択する管理者を登録します。
+              </div>
+
+              <div
+                className="formRow"
+                style={{
+                  marginTop: 12,
+                }}
+              >
+
+                <input
+                  placeholder="管理者名"
+                  value={
+                    newAdmin
+                  }
+                  onChange={(e) =>
+                    setNewAdmin(
+                      e.target.value
+                    )
+                  }
+                />
+
+                <button
+                  className="primary"
+                  onClick={
+                    addAdmin
+                  }
+                >
+                  管理者を追加
+                </button>
+
+              </div>
+
+            </div>
+
+            <div className="adminGrid">
+
+              {admins.map(
+                (admin) => (
+
+                  <div
+                    className="adminCard"
+                    key={
+                      admin.id
+                    }
+                  >
+
+                    <strong>
+                      {
+                        admin.name
+                      }
+                    </strong>
+
+                    <button
+                      className="danger"
+                      onClick={() =>
+                        setAdmins(
+                          (
+                            prev
+                          ) =>
+                            prev.filter(
+                              (
+                                item
+                              ) =>
+                                item.id !==
+                                admin.id
+                            )
+                        )
+                      }
+                    >
+                      削除
+                    </button>
+
+                  </div>
+
+                )
+              )}
+
+            </div>
+
+          </>
+        )}
+
       </div>
+
     </main>
   );
 }
