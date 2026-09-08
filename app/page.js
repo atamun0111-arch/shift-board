@@ -13,6 +13,15 @@ const SECTIONS = [
   "ランナー",
 ];
 
+const POSITIONS = [
+  "メンツ組",
+  "入口管理",
+  "場外管理",
+  "物販管理",
+  "呼び出し",
+  "場内管理",
+];
+
 const HOURS = Array.from(
   { length: 24 },
   (_, i) => `${String(i).padStart(2, "0")}:00`
@@ -86,6 +95,9 @@ const initialEvents = [
         time: "10:00",
         required: 5,
         assigned: ["s1"],
+        positions: {
+          s1: "入口管理",
+        },
         stasen: 0,
       },
 
@@ -95,6 +107,7 @@ const initialEvents = [
         time: "12:00",
         required: 3,
         assigned: ["s2"],
+        positions: {},
         stasen: 0,
       },
     ],
@@ -116,9 +129,7 @@ function storageRead(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
 
-    return raw
-      ? JSON.parse(raw)
-      : fallback;
+    return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
   }
@@ -131,11 +142,11 @@ function normalizeEvents(events) {
     slots: (event.slots || []).map((slot) => ({
       ...slot,
 
-      assigned:
-        slot.assigned || [],
+      assigned: slot.assigned || [],
 
-      stasen:
-        Number(slot.stasen) || 0,
+      positions: slot.positions || {},
+
+      stasen: Number(slot.stasen) || 0,
     })),
   }));
 }
@@ -174,10 +185,7 @@ function compactLabel(shift) {
   }
 
   if (shift.status === "time") {
-    return `${(shift.startHour || "--:--").slice(
-      0,
-      2
-    )}時〜`;
+    return `${(shift.startHour || "--:--").slice(0, 2)}時〜`;
   }
 
   if (shift.status === "undecided") {
@@ -201,79 +209,126 @@ function statusClass(status) {
   }[status || "none"];
 }
 
+function openPdfDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("sanhan_genbawari", 1);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains("pdfs")) {
+        db.createObjectStore("pdfs");
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function savePdfToDb(eventId, file) {
+  const db = await openPdfDb();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("pdfs", "readwrite");
+
+    tx.objectStore("pdfs").put(file, eventId);
+
+    tx.oncomplete = resolve;
+
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function getPdfFromDb(eventId) {
+  const db = await openPdfDb();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("pdfs", "readonly");
+
+    const request = tx.objectStore("pdfs").get(eventId);
+
+    request.onsuccess = () => resolve(request.result || null);
+
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deletePdfFromDb(eventId) {
+  const db = await openPdfDb();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("pdfs", "readwrite");
+
+    tx.objectStore("pdfs").delete(eventId);
+
+    tx.oncomplete = resolve;
+
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export default function Home() {
-  const [tab, setTab] =
-    useState("board");
+  const [tab, setTab] = useState("board");
 
-  const [month, setMonth] =
-    useState("2026-09");
+  const [month, setMonth] = useState("2026-09");
 
-  const [staff, setStaff] =
-    useState(initialStaff);
+  const [staff, setStaff] = useState(initialStaff);
 
-  const [admins, setAdmins] =
-    useState(initialAdmins);
+  const [admins, setAdmins] = useState(initialAdmins);
 
-  const [shifts, setShifts] =
-    useState(initialShifts);
+  const [shifts, setShifts] = useState(initialShifts);
 
-  const [events, setEvents] =
-    useState(initialEvents);
+  const [events, setEvents] = useState(initialEvents);
 
-  const [hydrated, setHydrated] =
-    useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
-  const [editingCell, setEditingCell] =
-    useState(null);
+  const [editingCell, setEditingCell] = useState(null);
 
-  const [newStaff, setNewStaff] =
-    useState({
-      name: "",
-      grade: "1",
-      rank: "無",
-      gender: "男性",
-    });
+  const [eventPdfs, setEventPdfs] = useState({});
 
-  const [newAdmin, setNewAdmin] =
-    useState("");
+  const [newStaff, setNewStaff] = useState({
+    name: "",
+    grade: "1",
+    rank: "無",
+    gender: "男性",
+  });
 
-  const [newEvent, setNewEvent] =
-    useState({
-      date: "2026-09-01",
-      eventName: "",
-      venueName: "",
-    });
+  const [newAdmin, setNewAdmin] = useState("");
 
-  const [
-    selectedEventId,
-    setSelectedEventId,
-  ] = useState("e1");
+  const [newEvent, setNewEvent] = useState({
+    date: "2026-09-01",
+    eventName: "",
+    venueName: "",
+  });
 
-  const [newSlot, setNewSlot] =
-    useState({
-      section: "整理",
-      time: "09:00",
-      required: "1",
-    });
+  const [selectedEventId, setSelectedEventId] = useState("e1");
+
+  const [newSlot, setNewSlot] = useState({
+    section: "整理",
+    time: "09:00",
+    required: "1",
+  });
 
   useEffect(() => {
     setStaff(
       storageRead(
-        "sb_staff_v6",
+        "sb_staff_v7",
         initialStaff
       )
     );
 
     setAdmins(
       storageRead(
-        "sb_admins_v6",
+        "sb_admins_v7",
         initialAdmins
       )
     );
 
     setShifts(
       storageRead(
-        "sb_shifts_v6",
+        "sb_shifts_v7",
         initialShifts
       )
     );
@@ -281,7 +336,7 @@ export default function Home() {
     setEvents(
       normalizeEvents(
         storageRead(
-          "sb_events_v6",
+          "sb_events_v7",
           initialEvents
         )
       )
@@ -294,7 +349,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_staff_v6",
+      "sb_staff_v7",
       JSON.stringify(staff)
     );
   }, [staff, hydrated]);
@@ -303,7 +358,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_admins_v6",
+      "sb_admins_v7",
       JSON.stringify(admins)
     );
   }, [admins, hydrated]);
@@ -312,7 +367,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_shifts_v6",
+      "sb_shifts_v7",
       JSON.stringify(shifts)
     );
   }, [shifts, hydrated]);
@@ -321,7 +376,7 @@ export default function Home() {
     if (!hydrated) return;
 
     localStorage.setItem(
-      "sb_events_v6",
+      "sb_events_v7",
       JSON.stringify(events)
     );
   }, [events, hydrated]);
@@ -339,9 +394,7 @@ export default function Home() {
     return Array.from(
       { length: count },
       (_, index) =>
-        `${month}-${String(
-          index + 1
-        ).padStart(2, "0")}`
+        `${month}-${String(index + 1).padStart(2, "0")}`
     );
   }, [month]);
 
@@ -361,23 +414,24 @@ export default function Home() {
 
   const selectedEvent =
     events.find(
-      (event) =>
-        event.id === selectedEventId
+      (event) => event.id === selectedEventId
     ) ||
     events[0] ||
     null;
 
-  function setShift(
-    staffId,
-    date,
-    patch
-  ) {
-    const key =
-      `${staffId}|${date}`;
+  useEffect(() => {
+    if (!selectedEventId) {
+      return;
+    }
+
+    loadEventPdf(selectedEventId);
+  }, [selectedEventId]);
+
+  function setShift(staffId, date, patch) {
+    const key = `${staffId}|${date}`;
 
     const current =
-      shifts[key] ||
-      emptyShift;
+      shifts[key] || emptyShift;
 
     setShifts((prev) => ({
       ...prev,
@@ -403,8 +457,7 @@ export default function Home() {
 
         ...newStaff,
 
-        name:
-          newStaff.name.trim(),
+        name: newStaff.name.trim(),
       },
     ]);
 
@@ -418,10 +471,7 @@ export default function Home() {
 
   function addAdmin() {
     if (!newAdmin.trim()) {
-      alert(
-        "管理者名を入力してください"
-      );
-
+      alert("管理者名を入力してください");
       return;
     }
 
@@ -469,9 +519,7 @@ export default function Home() {
       event,
     ]);
 
-    setSelectedEventId(
-      event.id
-    );
+    setSelectedEventId(event.id);
 
     setNewEvent((prev) => ({
       ...prev,
@@ -498,19 +546,14 @@ export default function Home() {
   }
 
   function deleteEvent(eventId) {
-    if (
-      !confirm(
-        "この現場を削除しますか？"
-      )
-    ) {
+    if (!confirm("この現場を削除しますか？")) {
       return;
     }
 
     setEvents((prev) => {
       const next =
         prev.filter(
-          (event) =>
-            event.id !== eventId
+          (event) => event.id !== eventId
         );
 
       setSelectedEventId(
@@ -519,6 +562,8 @@ export default function Home() {
 
       return next;
     });
+
+    deletePdfFromDb(eventId).catch(() => {});
   }
 
   function addSlot() {
@@ -533,10 +578,7 @@ export default function Home() {
     const required =
       Number(newSlot.required);
 
-    if (
-      !required ||
-      required < 1
-    ) {
+    if (!required || required < 1) {
       alert(
         "必要人数を1以上で入力してください"
       );
@@ -546,8 +588,7 @@ export default function Home() {
 
     setEvents((prev) =>
       prev.map((event) =>
-        event.id ===
-        selectedEvent.id
+        event.id === selectedEvent.id
           ? {
               ...event,
 
@@ -567,6 +608,8 @@ export default function Home() {
                   required,
 
                   assigned: [],
+
+                  positions: {},
 
                   stasen: 0,
                 },
@@ -633,6 +676,41 @@ export default function Home() {
     );
   }
 
+  function updateStaffPosition(
+    eventId,
+    slotId,
+    staffId,
+    position
+  ) {
+    setEvents((prev) =>
+      prev.map((event) => {
+        if (event.id !== eventId) {
+          return event;
+        }
+
+        return {
+          ...event,
+
+          slots: event.slots.map((slot) => {
+            if (slot.id !== slotId) {
+              return slot;
+            }
+
+            return {
+              ...slot,
+
+              positions: {
+                ...(slot.positions || {}),
+
+                [staffId]: position,
+              },
+            };
+          }),
+        };
+      })
+    );
+  }
+
   function canWork(
     staffId,
     date,
@@ -641,12 +719,9 @@ export default function Home() {
     const shift =
       shifts[
         `${staffId}|${date}`
-      ] ||
-      emptyShift;
+      ] || emptyShift;
 
-    if (
-      shift.status === "all"
-    ) {
+    if (shift.status === "all") {
       return true;
     }
 
@@ -654,9 +729,7 @@ export default function Home() {
       shift.status === "time" &&
       shift.startHour
     ) {
-      return (
-        shift.startHour <= time
-      );
+      return shift.startHour <= time;
     }
 
     return false;
@@ -669,8 +742,7 @@ export default function Home() {
     const shift =
       shifts[
         `${staffId}|${date}`
-      ] ||
-      emptyShift;
+      ] || emptyShift;
 
     return (
       shift.status === "all" ||
@@ -682,40 +754,25 @@ export default function Home() {
     staffId,
     date
   ) {
-    for (
-      const event of events
-    ) {
-      if (
-        event.date !== date
-      ) {
+    for (const event of events) {
+      if (event.date !== date) {
         continue;
       }
 
-      for (
-        const slot of
-          event.slots || []
-      ) {
+      for (const slot of event.slots || []) {
         if (
-          (
-            slot.assigned ||
-            []
-          ).includes(staffId)
+          (slot.assigned || []).includes(staffId)
         ) {
           return {
-            eventId:
-              event.id,
+            eventId: event.id,
 
-            slotId:
-              slot.id,
+            slotId: slot.id,
 
-            eventName:
-              event.eventName,
+            eventName: event.eventName,
 
-            section:
-              slot.section,
+            section: slot.section,
 
-            time:
-              slot.time,
+            time: slot.time,
           };
         }
       }
@@ -731,24 +788,20 @@ export default function Home() {
   ) {
     const event =
       events.find(
-        (item) =>
-          item.id === eventId
+        (item) => item.id === eventId
       );
 
     if (!event) return;
 
     const slot =
       event.slots.find(
-        (item) =>
-          item.id === slotId
+        (item) => item.id === slotId
       );
 
     if (!slot) return;
 
     const alreadyHere =
-      slot.assigned.includes(
-        staffId
-      );
+      slot.assigned.includes(staffId);
 
     if (!alreadyHere) {
       const otherAssignment =
@@ -760,10 +813,8 @@ export default function Home() {
       if (
         otherAssignment &&
         !(
-          otherAssignment.eventId ===
-            eventId &&
-          otherAssignment.slotId ===
-            slotId
+          otherAssignment.eventId === eventId &&
+          otherAssignment.slotId === slotId
         )
       ) {
         alert(
@@ -776,10 +827,7 @@ export default function Home() {
 
     setEvents((prev) =>
       prev.map((item) => {
-        if (
-          item.id !==
-          eventId
-        ) {
+        if (item.id !== eventId) {
           return item;
         }
 
@@ -790,10 +838,17 @@ export default function Home() {
             item.slots.map(
               (itemSlot) => {
                 if (
-                  itemSlot.id !==
-                  slotId
+                  itemSlot.id !== slotId
                 ) {
                   return itemSlot;
+                }
+
+                const newPositions = {
+                  ...(itemSlot.positions || {}),
+                };
+
+                if (alreadyHere) {
+                  delete newPositions[staffId];
                 }
 
                 return {
@@ -802,13 +857,15 @@ export default function Home() {
                   assigned:
                     alreadyHere
                       ? itemSlot.assigned.filter(
-                          (id) =>
-                            id !== staffId
+                          (id) => id !== staffId
                         )
                       : [
                           ...itemSlot.assigned,
                           staffId,
                         ],
+
+                  positions:
+                    newPositions,
                 };
               }
             ),
@@ -831,8 +888,7 @@ export default function Home() {
         )
     ) {
       for (
-        const slot of
-          event.slots
+        const slot of event.slots
       ) {
         for (
           const id of
@@ -844,6 +900,132 @@ export default function Home() {
     }
 
     return ids;
+  }
+
+  async function handlePdfUpload(
+    eventId,
+    file
+  ) {
+    if (!file) return;
+
+    if (
+      file.type !==
+      "application/pdf"
+    ) {
+      alert(
+        "PDFファイルを選択してください"
+      );
+
+      return;
+    }
+
+    try {
+      await savePdfToDb(
+        eventId,
+        file
+      );
+
+      const oldUrl =
+        eventPdfs[eventId];
+
+      if (oldUrl) {
+        URL.revokeObjectURL(
+          oldUrl
+        );
+      }
+
+      const url =
+        URL.createObjectURL(
+          file
+        );
+
+      setEventPdfs(
+        (prev) => ({
+          ...prev,
+          [eventId]: url,
+        })
+      );
+    } catch {
+      alert(
+        "PDFの保存に失敗しました"
+      );
+    }
+  }
+
+  async function loadEventPdf(
+    eventId
+  ) {
+    if (
+      eventPdfs[eventId]
+    ) {
+      return;
+    }
+
+    try {
+      const file =
+        await getPdfFromDb(
+          eventId
+        );
+
+      if (!file) {
+        return;
+      }
+
+      const url =
+        URL.createObjectURL(
+          file
+        );
+
+      setEventPdfs(
+        (prev) => ({
+          ...prev,
+          [eventId]: url,
+        })
+      );
+    } catch {}
+  }
+
+  async function removeEventPdf(
+    eventId
+  ) {
+    if (
+      !confirm(
+        "配置表PDFを削除しますか？"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await deletePdfFromDb(
+        eventId
+      );
+
+      const url =
+        eventPdfs[eventId];
+
+      if (url) {
+        URL.revokeObjectURL(
+          url
+        );
+      }
+
+      setEventPdfs(
+        (prev) => {
+          const next = {
+            ...prev,
+          };
+
+          delete next[eventId];
+
+          return next;
+        }
+      );
+    } catch {
+      alert(
+        "PDFの削除に失敗しました"
+      );
+    }
   }
 
   const offRows =
@@ -881,18 +1063,15 @@ export default function Home() {
       <style jsx global>{`
 
         * {
-          box-sizing:
-            border-box;
+          box-sizing: border-box;
         }
 
         body {
           margin: 0;
 
-          background:
-            #f5f6f8;
+          background: #f5f6f8;
 
-          color:
-            #1f2937;
+          color: #1f2937;
 
           font-family:
             -apple-system,
@@ -913,21 +1092,17 @@ export default function Home() {
         }
 
         .topbar {
-          background:
-            #111827;
+          background: #111827;
 
           color: white;
 
-          padding:
-            15px 20px;
+          padding: 15px 20px;
 
           display: flex;
 
-          justify-content:
-            space-between;
+          justify-content: space-between;
 
-          align-items:
-            center;
+          align-items: center;
 
           gap: 12px;
         }
@@ -939,11 +1114,9 @@ export default function Home() {
         }
 
         .brand p {
-          margin:
-            3px 0 0;
+          margin: 3px 0 0;
 
-          color:
-            #9ca3af;
+          color: #9ca3af;
 
           font-size: 11px;
         }
@@ -951,19 +1124,15 @@ export default function Home() {
         .month {
           border: 0;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          padding:
-            9px 11px;
+          padding: 9px 11px;
 
-          background:
-            white;
+          background: white;
         }
 
         .tabs {
-          position:
-            sticky;
+          position: sticky;
 
           top: 0;
 
@@ -975,43 +1144,34 @@ export default function Home() {
 
           flex-wrap: wrap;
 
-          padding:
-            10px 14px;
+          padding: 10px 14px;
 
-          background:
-            white;
+          background: white;
 
           border-bottom:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
         }
 
         .tab {
           border: 0;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          background:
-            #eef0f3;
+          background: #eef0f3;
 
-          padding:
-            8px 12px;
+          padding: 8px 12px;
 
-          font-weight:
-            700;
+          font-weight: 700;
         }
 
         .tab.active {
-          background:
-            #111827;
+          background: #111827;
 
           color: white;
         }
 
         .content {
-          max-width:
-            1900px;
+          max-width: 1900px;
 
           margin: auto;
 
@@ -1019,20 +1179,16 @@ export default function Home() {
         }
 
         .card {
-          background:
-            white;
+          background: white;
 
           border:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
 
-          border-radius:
-            12px;
+          border-radius: 12px;
 
           padding: 15px;
 
-          margin-bottom:
-            14px;
+          margin-bottom: 14px;
         }
 
         h2,
@@ -1041,48 +1197,37 @@ export default function Home() {
         }
 
         .muted {
-          color:
-            #6b7280;
+          color: #6b7280;
 
-          font-size:
-            11px;
+          font-size: 11px;
         }
 
         .primary {
           border: 0;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          background:
-            #2563eb;
+          background: #2563eb;
 
           color: white;
 
-          padding:
-            9px 13px;
+          padding: 9px 13px;
 
-          font-weight:
-            700;
+          font-weight: 700;
         }
 
         .danger {
           border: 0;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          background:
-            #fee2e2;
+          background: #fee2e2;
 
-          color:
-            #b91c1c;
+          color: #b91c1c;
 
-          padding:
-            8px 11px;
+          padding: 8px 11px;
 
-          font-weight:
-            700;
+          font-weight: 700;
         }
 
         .formRow {
@@ -1092,23 +1237,19 @@ export default function Home() {
 
           gap: 8px;
 
-          align-items:
-            center;
+          align-items: center;
         }
 
         input,
         select {
           border:
-            1px solid
-            #d1d5db;
+            1px solid #d1d5db;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
           padding: 9px;
 
-          background:
-            white;
+          background: white;
         }
 
         .boardWrap {
@@ -1120,63 +1261,50 @@ export default function Home() {
               180px
             );
 
-          min-height:
-            500px;
+          min-height: 500px;
 
           border:
-            1px solid
-            #dfe3e8;
+            1px solid #dfe3e8;
 
-          border-radius:
-            10px;
+          border-radius: 10px;
 
-          background:
-            white;
+          background: white;
         }
 
         .shiftTable {
           border-collapse:
             separate;
 
-          border-spacing:
-            0;
+          border-spacing: 0;
 
-          width:
-            max-content;
+          width: max-content;
 
-          min-width:
-            100%;
+          min-width: 100%;
         }
 
         .shiftTable th,
         .shiftTable td {
           border-right:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
 
           border-bottom:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
 
           padding: 3px;
 
-          text-align:
-            center;
+          text-align: center;
 
-          vertical-align:
-            middle;
+          vertical-align: middle;
         }
 
         .shiftTable th {
-          position:
-            sticky;
+          position: sticky;
 
           top: 0;
 
           z-index: 8;
 
-          background:
-            #f3f4f6;
+          background: #f3f4f6;
         }
 
         .dateHead {
@@ -1190,16 +1318,14 @@ export default function Home() {
 
           width: 190px;
 
-          min-width:
-            190px;
+          min-width: 190px;
 
           text-align:
             left !important;
         }
 
         .dateCell {
-          position:
-            sticky;
+          position: sticky;
 
           left: 0;
 
@@ -1207,11 +1333,9 @@ export default function Home() {
 
           width: 190px;
 
-          min-width:
-            190px;
+          min-width: 190px;
 
-          background:
-            white;
+          background: white;
 
           text-align:
             left !important;
@@ -1230,54 +1354,41 @@ export default function Home() {
         }
 
         .availableCount {
-          font-size:
-            10px;
+          font-size: 10px;
 
-          color:
-            #166534;
+          color: #166534;
 
-          font-weight:
-            800;
+          font-weight: 800;
         }
 
         .requiredCount {
-          margin-top:
-            2px;
+          margin-top: 2px;
 
-          color:
-            #b45309;
+          color: #b45309;
 
-          font-size:
-            10px;
+          font-size: 10px;
 
-          font-weight:
-            800;
+          font-weight: 800;
         }
 
         .eventMini {
-          margin-top:
-            4px;
+          margin-top: 4px;
 
           padding: 4px;
 
-          border-radius:
-            5px;
+          border-radius: 5px;
 
-          background:
-            #eff6ff;
+          background: #eff6ff;
 
-          font-size:
-            9px;
+          font-size: 9px;
         }
 
         .personHead {
           width: 78px;
 
-          min-width:
-            78px;
+          min-width: 78px;
 
-          max-width:
-            78px;
+          max-width: 78px;
 
           padding:
             5px 2px !important;
@@ -1287,120 +1398,92 @@ export default function Home() {
           display:
             -webkit-box;
 
-          -webkit-line-clamp:
-            2;
+          -webkit-line-clamp: 2;
 
           -webkit-box-orient:
             vertical;
 
-          overflow:
-            hidden;
+          overflow: hidden;
 
-          font-size:
-            10px;
+          font-size: 10px;
 
-          line-height:
-            1.2;
+          line-height: 1.2;
 
-          word-break:
-            break-all;
+          word-break: break-all;
         }
 
         .personMeta {
-          margin-top:
-            2px;
+          margin-top: 2px;
 
-          font-size:
-            8px;
+          font-size: 8px;
 
-          color:
-            #6b7280;
+          color: #6b7280;
         }
 
         .shiftCell {
           width: 78px;
 
-          min-width:
-            78px;
+          min-width: 78px;
 
-          max-width:
-            78px;
+          max-width: 78px;
         }
 
         .cellButton {
           width: 100%;
 
-          min-height:
-            36px;
+          min-height: 36px;
 
           border: 0;
 
-          border-radius:
-            6px;
+          border-radius: 6px;
 
-          font-weight:
-            800;
+          font-weight: 800;
 
-          font-size:
-            13px;
+          font-size: 13px;
         }
 
         .statusAll {
-          background:
-            #dcfce7;
+          background: #dcfce7;
         }
 
         .statusTime {
-          background:
-            #dbeafe;
+          background: #dbeafe;
         }
 
         .statusUndecided {
-          background:
-            #fef3c7;
+          background: #fef3c7;
         }
 
         .statusOff {
-          background:
-            #fee2e2;
+          background: #fee2e2;
         }
 
         .statusNone {
-          background:
-            #f3f4f6;
+          background: #f3f4f6;
 
-          color:
-            #6b7280;
+          color: #6b7280;
         }
 
         .negotiatedMark {
           display: block;
 
-          margin-top:
-            1px;
+          margin-top: 1px;
 
-          font-size:
-            7px;
+          font-size: 7px;
 
-          line-height:
-            1.1;
+          line-height: 1.1;
 
-          color:
-            #374151;
+          color: #374151;
 
-          white-space:
-            nowrap;
+          white-space: nowrap;
 
-          overflow:
-            hidden;
+          overflow: hidden;
 
-          text-overflow:
-            ellipsis;
+          text-overflow: ellipsis;
         }
 
         .modalBack {
-          position:
-            fixed;
+          position: fixed;
 
           inset: 0;
 
@@ -1408,11 +1491,9 @@ export default function Home() {
 
           display: flex;
 
-          align-items:
-            center;
+          align-items: center;
 
-          justify-content:
-            center;
+          justify-content: center;
 
           padding: 18px;
 
@@ -1432,11 +1513,9 @@ export default function Home() {
               100%
             );
 
-          background:
-            white;
+          background: white;
 
-          border-radius:
-            14px;
+          border-radius: 14px;
 
           padding: 18px;
         }
@@ -1453,32 +1532,25 @@ export default function Home() {
         .closeBtn {
           border: 0;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          background:
-            #eef0f3;
+          background: #eef0f3;
 
-          padding:
-            7px 10px;
+          padding: 7px 10px;
         }
 
         .modalField {
-          margin-top:
-            14px;
+          margin-top: 14px;
         }
 
         .modalField label {
           display: block;
 
-          margin-bottom:
-            5px;
+          margin-bottom: 5px;
 
-          font-size:
-            12px;
+          font-size: 12px;
 
-          font-weight:
-            800;
+          font-weight: 800;
         }
 
         .modalField select {
@@ -1486,20 +1558,16 @@ export default function Home() {
         }
 
         .negotiationBox {
-          margin-top:
-            16px;
+          margin-top: 16px;
 
           padding: 13px;
 
-          border-radius:
-            10px;
+          border-radius: 10px;
 
-          background:
-            #f9fafb;
+          background: #f9fafb;
 
           border:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
         }
 
         .checkRow {
@@ -1507,11 +1575,9 @@ export default function Home() {
 
           gap: 8px;
 
-          align-items:
-            center;
+          align-items: center;
 
-          font-weight:
-            800;
+          font-weight: 800;
         }
 
         .checkRow input {
@@ -1536,32 +1602,25 @@ export default function Home() {
         .eventList button {
           width: 100%;
 
-          margin-bottom:
-            7px;
+          margin-bottom: 7px;
 
           padding: 10px;
 
-          text-align:
-            left;
+          text-align: left;
 
           border:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          background:
-            white;
+          background: white;
         }
 
         .eventList
           button.selected {
-          background:
-            #eff6ff;
+          background: #eff6ff;
 
-          border-color:
-            #2563eb;
+          border-color: #2563eb;
         }
 
         .editForm {
@@ -1578,16 +1637,13 @@ export default function Home() {
 
         .slot {
           border:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
 
-          border-radius:
-            10px;
+          border-radius: 10px;
 
           padding: 12px;
 
-          margin-bottom:
-            10px;
+          margin-bottom: 10px;
         }
 
         .slotEdit {
@@ -1603,8 +1659,7 @@ export default function Home() {
         }
 
         .slotStats {
-          margin-top:
-            8px;
+          margin-top: 8px;
 
           display: flex;
 
@@ -1619,27 +1674,21 @@ export default function Home() {
         .stasenBox {
           display: flex;
 
-          align-items:
-            center;
+          align-items: center;
 
           gap: 7px;
 
-          margin-top:
-            10px;
+          margin-top: 10px;
 
-          padding:
-            9px 10px;
+          padding: 9px 10px;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          background:
-            #f3f4f6;
+          background: #f3f4f6;
         }
 
         .stasenBox strong {
-          font-size:
-            12px;
+          font-size: 12px;
         }
 
         .stasenBox input {
@@ -1649,19 +1698,15 @@ export default function Home() {
         }
 
         .shortage {
-          color:
-            #b91c1c;
+          color: #b91c1c;
 
-          font-weight:
-            800;
+          font-weight: 800;
         }
 
         .ok {
-          color:
-            #15803d;
+          color: #15803d;
 
-          font-weight:
-            800;
+          font-weight: 800;
         }
 
         .candidateGrid {
@@ -1671,53 +1716,75 @@ export default function Home() {
             repeat(
               auto-fill,
               minmax(
-                135px,
+                150px,
                 1fr
               )
             );
 
           gap: 7px;
 
-          margin-top:
-            10px;
+          margin-top: 10px;
         }
 
         .candidate {
           border:
-            1px solid
-            #d1d5db;
+            1px solid #d1d5db;
 
-          border-radius:
-            8px;
+          border-radius: 8px;
 
-          background:
-            white;
+          background: white;
 
           padding: 9px;
 
-          text-align:
-            left;
+          text-align: left;
         }
 
         .candidate.assigned {
-          background:
-            #dcfce7;
+          background: #dcfce7;
 
-          border-color:
-            #86efac;
+          border-color: #86efac;
         }
 
         .hereText {
           display: block;
 
-          margin-top:
-            3px;
+          margin-top: 3px;
 
-          font-weight:
-            900;
+          font-weight: 900;
 
-          color:
-            #15803d;
+          color: #15803d;
+        }
+
+        .positionSelect {
+          width: 100%;
+
+          margin-top: 6px;
+
+          padding: 5px 4px;
+
+          border:
+            1px solid #86efac;
+
+          border-radius: 6px;
+
+          background: white;
+
+          font-size: 10px;
+        }
+
+        .pdfViewer {
+          width: 100%;
+
+          height: 650px;
+
+          margin-top: 14px;
+
+          border:
+            1px solid #e5e7eb;
+
+          border-radius: 8px;
+
+          background: #f9fafb;
         }
 
         .staffGrid,
@@ -1743,59 +1810,49 @@ export default function Home() {
           justify-content:
             space-between;
 
-          align-items:
-            center;
+          align-items: center;
 
           gap: 10px;
 
           padding: 11px;
 
           border:
-            1px solid
-            #e5e7eb;
+            1px solid #e5e7eb;
 
-          border-radius:
-            9px;
+          border-radius: 9px;
 
-          background:
-            white;
+          background: white;
         }
 
         .offDate {
-          margin-bottom:
-            14px;
+          margin-bottom: 14px;
         }
 
         .offList {
           display: flex;
 
-          flex-wrap:
-            wrap;
+          flex-wrap: wrap;
 
           gap: 6px;
 
-          margin-top:
-            6px;
+          margin-top: 6px;
         }
 
         .offChip {
-          padding:
-            6px 9px;
+          padding: 6px 9px;
 
-          border-radius:
-            999px;
+          border-radius: 999px;
 
-          background:
-            #f3f4f6;
+          background: #f3f4f6;
 
-          font-size:
-            11px;
+          font-size: 11px;
         }
 
         @media (
           max-width:
             900px
         ) {
+
           .content {
             padding: 9px;
           }
@@ -1813,23 +1870,22 @@ export default function Home() {
 
           .dateHead,
           .dateCell {
-            width:
-              160px;
+            width: 160px;
 
-            min-width:
-              160px;
+            min-width: 160px;
           }
 
           .personHead,
           .shiftCell {
-            width:
-              70px;
+            width: 70px;
 
-            min-width:
-              70px;
+            min-width: 70px;
 
-            max-width:
-              70px;
+            max-width: 70px;
+          }
+
+          .pdfViewer {
+            height: 500px;
           }
         }
 
@@ -1840,7 +1896,7 @@ export default function Home() {
         <div className="brand">
 
           <h1>
-            SHIFT BOARD
+            3班現場割
           </h1>
 
           <p>
@@ -1941,31 +1997,23 @@ export default function Home() {
                       (person) => (
 
                         <th
-                          key={
-                            person.id
-                          }
+                          key={person.id}
                           className="personHead"
                         >
 
                           <span className="personName">
-                            {
-                              person.name
-                            }
+                            {person.name}
                           </span>
 
                           <div className="personMeta">
 
-                            {person.grade ===
-                            "F"
+                            {person.grade === "F"
                               ? "F"
                               : `${person.grade}年`}
 
                             {" / "}
 
-                            R
-                            {
-                              person.rank
-                            }
+                            R{person.rank}
 
                           </div>
 
@@ -1985,9 +2033,7 @@ export default function Home() {
 
                       const availablePeople =
                         staff.filter(
-                          (
-                            person
-                          ) =>
+                          (person) =>
                             canWorkOnDate(
                               person.id,
                               date
@@ -1996,9 +2042,7 @@ export default function Home() {
 
                       const allCount =
                         availablePeople.filter(
-                          (
-                            person
-                          ) =>
+                          (person) =>
                             (
                               shifts[
                                 `${person.id}|${date}`
@@ -2059,21 +2103,25 @@ export default function Home() {
                               </strong>
 
                               <span className="availableCount">
+
                                 稼働可能{" "}
                                 {
                                   availablePeople.length
                                 }
                                 人
+
                               </span>
 
                             </div>
 
                             <div className="requiredCount">
+
                               現場必要{" "}
                               {
                                 totalRequired
                               }
                               人
+
                             </div>
 
                             <div className="muted">
@@ -2111,23 +2159,17 @@ export default function Home() {
 
                                   <div
                                     className="eventMini"
-                                    key={
-                                      event.id
-                                    }
+                                    key={event.id}
                                   >
 
                                     <strong>
-                                      {
-                                        event.eventName
-                                      }
+                                      {event.eventName}
                                     </strong>
 
                                     {" "}
 
                                     必要
-                                    {
-                                      eventRequired
-                                    }
+                                    {eventRequired}
                                     人
 
                                   </div>
@@ -2139,24 +2181,18 @@ export default function Home() {
                           </td>
 
                           {staff.map(
-                            (
-                              person
-                            ) => {
+                            (person) => {
 
                               const key =
                                 `${person.id}|${date}`;
 
                               const shift =
-                                shifts[
-                                  key
-                                ] ||
+                                shifts[key] ||
                                 emptyShift;
 
                               const admin =
                                 admins.find(
-                                  (
-                                    admin
-                                  ) =>
+                                  (admin) =>
                                     admin.id ===
                                     shift.negotiatedBy
                                 );
@@ -2164,9 +2200,7 @@ export default function Home() {
                               return (
 
                                 <td
-                                  key={
-                                    person.id
-                                  }
+                                  key={person.id}
                                   className="shiftCell"
                                 >
 
@@ -2250,9 +2284,7 @@ export default function Home() {
               <div
                 className="modalBack"
                 onClick={() =>
-                  setEditingCell(
-                    null
-                  )
+                  setEditingCell(null)
                 }
               >
 
@@ -2272,9 +2304,7 @@ export default function Home() {
                       </h3>
 
                       <div className="muted">
-                        {
-                          editingCell.date
-                        }
+                        {editingCell.date}
                       </div>
 
                     </div>
@@ -2282,9 +2312,7 @@ export default function Home() {
                     <button
                       className="closeBtn"
                       onClick={() =>
-                        setEditingCell(
-                          null
-                        )
+                        setEditingCell(null)
                       }
                     >
                       閉じる
@@ -2299,9 +2327,7 @@ export default function Home() {
                     </label>
 
                     <select
-                      value={
-                        shift.status
-                      }
+                      value={shift.status}
                       onChange={(e) => {
 
                         const status =
@@ -2379,9 +2405,7 @@ export default function Home() {
                           (hour) => (
 
                             <option
-                              key={
-                                hour
-                              }
+                              key={hour}
                             >
                               {hour}
                             </option>
@@ -2458,16 +2482,10 @@ export default function Home() {
                             (admin) => (
 
                               <option
-                                key={
-                                  admin.id
-                                }
-                                value={
-                                  admin.id
-                                }
+                                key={admin.id}
+                                value={admin.id}
                               >
-                                {
-                                  admin.name
-                                }
+                                {admin.name}
                               </option>
 
                             )
@@ -2502,9 +2520,7 @@ export default function Home() {
 
                 <input
                   type="date"
-                  value={
-                    newEvent.date
-                  }
+                  value={newEvent.date}
                   onChange={(e) =>
                     setNewEvent({
                       ...newEvent,
@@ -2544,9 +2560,7 @@ export default function Home() {
 
                 <button
                   className="primary"
-                  onClick={
-                    addEvent
-                  }
+                  onClick={addEvent}
                 >
                   現場を追加
                 </button>
@@ -2575,9 +2589,7 @@ export default function Home() {
                     (event) => (
 
                       <button
-                        key={
-                          event.id
-                        }
+                        key={event.id}
                         className={
                           selectedEvent?.id ===
                           event.id
@@ -2602,16 +2614,12 @@ export default function Home() {
 
                           {" "}
 
-                          {
-                            event.eventName
-                          }
+                          {event.eventName}
 
                         </strong>
 
                         <div className="muted">
-                          {
-                            event.venueName
-                          }
+                          {event.venueName}
                         </div>
 
                       </button>
@@ -2692,6 +2700,86 @@ export default function Home() {
                     <div className="card">
 
                       <h3>
+                        配置表PDF
+                      </h3>
+
+                      <div className="muted">
+                        この現場の配置表PDFをアップロードできます。
+                      </div>
+
+                      <div
+                        className="formRow"
+                        style={{
+                          marginTop: 10,
+                        }}
+                      >
+
+                        <input
+                          type="file"
+                          accept="application/pdf"
+                          onChange={(e) =>
+                            handlePdfUpload(
+                              selectedEvent.id,
+                              e.target.files?.[0]
+                            )
+                          }
+                        />
+
+                        {eventPdfs[
+                          selectedEvent.id
+                        ] && (
+                          <>
+
+                            <button
+                              className="primary"
+                              onClick={() =>
+                                window.open(
+                                  eventPdfs[
+                                    selectedEvent.id
+                                  ],
+                                  "_blank"
+                                )
+                              }
+                            >
+                              配置表を見る
+                            </button>
+
+                            <button
+                              className="danger"
+                              onClick={() =>
+                                removeEventPdf(
+                                  selectedEvent.id
+                                )
+                              }
+                            >
+                              PDF削除
+                            </button>
+
+                          </>
+                        )}
+
+                      </div>
+
+                      {eventPdfs[
+                        selectedEvent.id
+                      ] && (
+
+                        <iframe
+                          className="pdfViewer"
+                          src={
+                            eventPdfs[
+                              selectedEvent.id
+                            ]
+                          }
+                        />
+
+                      )}
+
+                    </div>
+
+                    <div className="card">
+
+                      <h3>
                         セクション追加
                       </h3>
 
@@ -2714,9 +2802,7 @@ export default function Home() {
                             (section) => (
 
                               <option
-                                key={
-                                  section
-                                }
+                                key={section}
                               >
                                 {section}
                               </option>
@@ -2743,9 +2829,7 @@ export default function Home() {
                             (hour) => (
 
                               <option
-                                key={
-                                  hour
-                                }
+                                key={hour}
                               >
                                 {hour}
                               </option>
@@ -2772,9 +2856,7 @@ export default function Home() {
 
                         <button
                           className="primary"
-                          onClick={
-                            addSlot
-                          }
+                          onClick={addSlot}
                         >
                           追加
                         </button>
@@ -2802,9 +2884,7 @@ export default function Home() {
 
                             const availableStaff =
                               staff.filter(
-                                (
-                                  person
-                                ) => {
+                                (person) => {
 
                                   if (
                                     !canWork(
@@ -2822,9 +2902,7 @@ export default function Home() {
                                       selectedEvent.date
                                     );
 
-                                  if (
-                                    !assigned
-                                  ) {
+                                  if (!assigned) {
                                     return true;
                                   }
 
@@ -2857,9 +2935,7 @@ export default function Home() {
 
                               <div
                                 className="slot"
-                                key={
-                                  slot.id
-                                }
+                                key={slot.id}
                               >
 
                                 <div className="slotEdit">
@@ -2881,18 +2957,12 @@ export default function Home() {
                                   >
 
                                     {SECTIONS.map(
-                                      (
-                                        section
-                                      ) => (
+                                      (section) => (
 
                                         <option
-                                          key={
-                                            section
-                                          }
+                                          key={section}
                                         >
-                                          {
-                                            section
-                                          }
+                                          {section}
                                         </option>
 
                                       )
@@ -2917,18 +2987,12 @@ export default function Home() {
                                   >
 
                                     {HOURS.map(
-                                      (
-                                        hour
-                                      ) => (
+                                      (hour) => (
 
                                         <option
-                                          key={
-                                            hour
-                                          }
+                                          key={hour}
                                         >
-                                          {
-                                            hour
-                                          }
+                                          {hour}
                                         </option>
 
                                       )
@@ -2980,9 +3044,7 @@ export default function Home() {
                                   <input
                                     type="number"
                                     min="0"
-                                    value={
-                                      stasen
-                                    }
+                                    value={stasen}
                                     onChange={(e) =>
                                       updateSlot(
                                         selectedEvent.id,
@@ -3020,40 +3082,32 @@ export default function Home() {
                                     {" / "}
 
                                     スタセン{" "}
-                                    {
-                                      stasen
-                                    }
+                                    {stasen}
                                     人
 
                                     {" / "}
 
                                     合計{" "}
-                                    {
-                                      totalPlaced
-                                    }
+                                    {totalPlaced}
                                     人
 
                                     {" / "}
 
                                     必要{" "}
-                                    {
-                                      slot.required
-                                    }
+                                    {slot.required}
                                     人
 
                                   </span>
 
                                   <strong
                                     className={
-                                      shortage >
-                                      0
+                                      shortage > 0
                                         ? "shortage"
                                         : "ok"
                                     }
                                   >
 
-                                    {shortage >
-                                    0
+                                    {shortage > 0
                                       ? `あと${shortage}人不足`
                                       : "充足"}
 
@@ -3064,9 +3118,7 @@ export default function Home() {
                                 <div className="candidateGrid">
 
                                   {availableStaff.map(
-                                    (
-                                      person
-                                    ) => {
+                                    (person) => {
 
                                       const assigned =
                                         slot.assigned.includes(
@@ -3082,9 +3134,7 @@ export default function Home() {
                                       return (
 
                                         <button
-                                          key={
-                                            person.id
-                                          }
+                                          key={person.id}
                                           className={`candidate ${
                                             assigned
                                               ? "assigned"
@@ -3100,9 +3150,7 @@ export default function Home() {
                                         >
 
                                           <strong>
-                                            {
-                                              person.name
-                                            }
+                                            {person.name}
                                           </strong>
 
                                           <div className="muted">
@@ -3112,11 +3160,54 @@ export default function Home() {
                                           </div>
 
                                           {assigned && (
+                                            <>
 
-                                            <span className="hereText">
-                                              ここ
-                                            </span>
+                                              <span className="hereText">
+                                                ここ
+                                              </span>
 
+                                              <select
+                                                className="positionSelect"
+                                                value={
+                                                  slot.positions?.[
+                                                    person.id
+                                                  ] || ""
+                                                }
+                                                onClick={(e) =>
+                                                  e.stopPropagation()
+                                                }
+                                                onChange={(e) => {
+                                                  e.stopPropagation();
+
+                                                  updateStaffPosition(
+                                                    selectedEvent.id,
+                                                    slot.id,
+                                                    person.id,
+                                                    e.target.value
+                                                  );
+                                                }}
+                                              >
+
+                                                <option value="">
+                                                  ポジション選択
+                                                </option>
+
+                                                {POSITIONS.map(
+                                                  (position) => (
+
+                                                    <option
+                                                      key={position}
+                                                      value={position}
+                                                    >
+                                                      {position}
+                                                    </option>
+
+                                                  )
+                                                )}
+
+                                              </select>
+
+                                            </>
                                           )}
 
                                         </button>
@@ -3127,14 +3218,12 @@ export default function Home() {
 
                                 </div>
 
-                                {availableStaff.length ===
-                                  0 && (
+                                {availableStaff.length === 0 && (
 
                                   <div
                                     className="muted"
                                     style={{
-                                      marginTop:
-                                        10,
+                                      marginTop: 10,
                                     }}
                                   >
                                     この枠に配置できる名簿スタッフはいません。
@@ -3180,9 +3269,7 @@ export default function Home() {
 
                 <div
                   className="offDate"
-                  key={
-                    date
-                  }
+                  key={date}
                 >
 
                   <strong>
@@ -3197,9 +3284,7 @@ export default function Home() {
                   <div className="offList">
 
                     {people.map(
-                      (
-                        person
-                      ) => {
+                      (person) => {
 
                         const shift =
                           shifts[
@@ -3211,14 +3296,10 @@ export default function Home() {
 
                           <span
                             className="offChip"
-                            key={
-                              person.id
-                            }
+                            key={person.id}
                           >
 
-                            {
-                              person.name
-                            }
+                            {person.name}
 
                             ｜
 
@@ -3367,9 +3448,7 @@ export default function Home() {
 
                 <button
                   className="primary"
-                  onClick={
-                    addStaff
-                  }
+                  onClick={addStaff}
                 >
                   追加
                 </button>
@@ -3385,32 +3464,25 @@ export default function Home() {
 
                   <div
                     className="staffCard"
-                    key={
-                      person.id
-                    }
+                    key={person.id}
                   >
 
                     <div>
 
                       <strong>
-                        {
-                          person.name
-                        }
+                        {person.name}
                       </strong>
 
                       <div className="muted">
 
-                        {person.grade ===
-                        "F"
+                        {person.grade === "F"
                           ? "F"
                           : `${person.grade}年`}
 
                         {" / "}
 
                         ランク{" "}
-                        {
-                          person.rank
-                        }
+                        {person.rank}
 
                       </div>
 
@@ -3420,13 +3492,9 @@ export default function Home() {
                       className="danger"
                       onClick={() =>
                         setStaff(
-                          (
-                            prev
-                          ) =>
+                          (prev) =>
                             prev.filter(
-                              (
-                                member
-                              ) =>
+                              (member) =>
                                 member.id !==
                                 person.id
                             )
@@ -3468,9 +3536,7 @@ export default function Home() {
 
                 <input
                   placeholder="管理者名"
-                  value={
-                    newAdmin
-                  }
+                  value={newAdmin}
                   onChange={(e) =>
                     setNewAdmin(
                       e.target.value
@@ -3480,9 +3546,7 @@ export default function Home() {
 
                 <button
                   className="primary"
-                  onClick={
-                    addAdmin
-                  }
+                  onClick={addAdmin}
                 >
                   管理者を追加
                 </button>
@@ -3498,28 +3562,20 @@ export default function Home() {
 
                   <div
                     className="adminCard"
-                    key={
-                      admin.id
-                    }
+                    key={admin.id}
                   >
 
                     <strong>
-                      {
-                        admin.name
-                      }
+                      {admin.name}
                     </strong>
 
                     <button
                       className="danger"
                       onClick={() =>
                         setAdmins(
-                          (
-                            prev
-                          ) =>
+                          (prev) =>
                             prev.filter(
-                              (
-                                item
-                              ) =>
+                              (item) =>
                                 item.id !==
                                 admin.id
                             )
