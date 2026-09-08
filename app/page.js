@@ -208,41 +208,15 @@ export default function Home() {
     setLoggingIn(true);
     setLoginError("");
 
-    try {
-      const response = await fetch("/api/admin-login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          loginId: loginEmail,
-          password: loginPassword,
-        }),
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password: loginPassword,
+    });
 
-      const result = await response.json();
+    setLoggingIn(false);
 
-      if (!response.ok || !result.ok) {
-        setLoginError(
-          result.message || "IDまたはパスワードが違います。"
-        );
-        return;
-      }
-
-      const { error } = await supabase.auth.setSession({
-        access_token: result.accessToken,
-        refresh_token: result.refreshToken,
-      });
-
-      if (error) {
-        console.error(error);
-        setLoginError("ログイン処理に失敗しました。");
-      }
-    } catch (error) {
-      console.error(error);
-      setLoginError("ログイン処理に失敗しました。");
-    } finally {
-      setLoggingIn(false);
+    if (error) {
+      setLoginError("メールアドレスまたはパスワードが違います。");
     }
   }
 
@@ -1329,8 +1303,8 @@ export default function Home() {
           <p>管理者ログイン</p>
 
           <input
-            type="text"
-            placeholder="管理者ID"
+            type="email"
+            placeholder="メールアドレス"
             value={loginEmail}
             onChange={(e) =>
               setLoginEmail(e.target.value)
