@@ -3604,9 +3604,9 @@ export default function Home() {
                               <div
                                 style={{
                                   display: "grid",
-                                  gridTemplateColumns:
-                                    "minmax(120px, 1.5fr) repeat(4, minmax(90px, 1fr))",
+                                  gridTemplateColumns: "1fr",
                                   gap: 8,
+                                  width: "100%",
                                 }}
                               >
                                 <input
