@@ -284,6 +284,20 @@ export default function Home() {
     return groups;
   }, [boardStaff, teams]);
 
+  const submissionStatus = useMemo(() => {
+    const submittedIds = new Set();
+    for (const person of staff) {
+      if (days.some((date) => !!shifts[`${person.id}|${date}`])) submittedIds.add(person.id);
+    }
+    return { submitted: staff.filter((p) => submittedIds.has(p.id)), unsubmitted: staff.filter((p) => !submittedIds.has(p.id)) };
+  }, [staff, days, shifts]);
+
+  function copyUnsubmittedStaff() {
+    if (!submissionStatus.unsubmitted.length) return alert("未提出者はいません！");
+    const message = ["【シフト未提出者】", ...submissionStatus.unsubmitted.map((p) => `・${p.name}`), "", `${month.replace("-", "年")}月分のシフト未提出の方は提出をお願いします！`].join("\n");
+    navigator.clipboard.writeText(message).then(() => alert("未提出者リストをコピーしました！")).catch(() => window.prompt("この文章をコピーしてください", message));
+  }
+
   function getTeamColor(teamId) {
     if (!teamId) return "#e5e7eb";
 
@@ -4237,6 +4251,25 @@ export default function Home() {
                   {savingShiftPeriod ? "保存中..." : "設定を保存"}
                 </button>
               </div>
+            </div>
+
+            <div className="card">
+              <h3>提出状況</h3>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                <div style={{ padding: "8px 12px", borderRadius: 8, background: "#dcfce7", fontWeight: 800 }}>提出済み {submissionStatus.submitted.length}人</div>
+                <div style={{ padding: "8px 12px", borderRadius: 8, background: "#fee2e2", fontWeight: 800 }}>未提出 {submissionStatus.unsubmitted.length}人</div>
+              </div>
+              {submissionStatus.unsubmitted.length === 0 ? (
+                <div style={{ padding: 12, borderRadius: 8, background: "#dcfce7", fontWeight: 800 }}>🎉 全員提出済みです！</div>
+              ) : (
+                <>
+                  <div style={{ padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fff", marginBottom: 10, lineHeight: 1.7 }}>
+                    <strong>【シフト未提出者】</strong>
+                    {submissionStatus.unsubmitted.map((person) => <div key={person.id}>・{person.name}</div>)}
+                  </div>
+                  <button className="primary" onClick={copyUnsubmittedStaff}>LINE用に未提出者をコピー</button>
+                </>
+              )}
             </div>
 
             <div className="card">
