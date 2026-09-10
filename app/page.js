@@ -2105,6 +2105,19 @@ export default function Home() {
           color: #6b7280;
         }
 
+        .rankFourPlus {
+          box-shadow: inset 0 -4px 0 #f59e0b;
+        }
+
+        .trainingTarget {
+          box-shadow: inset 0 -4px 0 #3b82f6;
+        }
+
+        .rankFourPlus .personName,
+        .trainingTarget .personName {
+          font-weight: 900;
+        }
+
         .shiftCell {
           width: 78px;
           min-width: 78px;
@@ -2553,9 +2566,22 @@ export default function Home() {
                           key={person.id}
                           className={`personHead ${
                             isTeamStart ? "teamStart" : ""
+                          } ${
+                            ["1", "2", "3", "4"].includes(String(person.rank))
+                              ? "rankFourPlus"
+                              : ""
+                          } ${
+                            person.rank === "育成対象"
+                              ? "trainingTarget"
+                              : ""
                           }`}
                           style={{
-                            background: getTeamColor(person.team_id),
+                            background:
+                              person.rank === "育成対象"
+                                ? "#dbeafe"
+                                : ["1", "2", "3", "4"].includes(String(person.rank))
+                                  ? "#fef3c7"
+                                  : getTeamColor(person.team_id),
                           }}
                         >
                           <span className="personName">
@@ -2567,7 +2593,9 @@ export default function Home() {
                               ? "F"
                               : `${person.grade}年`}
                             {" / "}
-                            R{person.rank}
+                            {person.rank === "育成対象"
+                              ? "育成対象"
+                              : `R${person.rank}`}
                           </div>
                         </th>
                       );
@@ -3835,6 +3863,7 @@ export default function Home() {
                   }
                 >
                   <option value="無">無</option>
+                  <option value="育成対象">育成対象</option>
                   <option value="1">1</option>
                   <option value="2">2</option>
                   <option value="3">3</option>
@@ -4047,6 +4076,7 @@ export default function Home() {
                                   }
                                 >
                                   <option value="無">ランク無</option>
+                                  <option value="育成対象">育成対象</option>
                                   <option value="1">ランク1</option>
                                   <option value="2">ランク2</option>
                                   <option value="3">ランク3</option>
