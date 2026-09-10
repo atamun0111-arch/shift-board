@@ -286,10 +286,25 @@ export default function Home() {
 
   const submissionStatus = useMemo(() => {
     const submittedIds = new Set();
+
     for (const person of staff) {
-      if (days.some((date) => !!shifts[`${person.id}|${date}`])) submittedIds.add(person.id);
+      const hasSubmittedValue = days.some((date) => {
+        const shift = shifts[`${person.id}|${date}`];
+
+        // 行が存在するだけでは提出済みにしない。
+        // 月内に1日でも「未提出(none)以外」の回答があれば提出済み。
+        return !!shift && shift.status && shift.status !== "none";
+      });
+
+      if (hasSubmittedValue) {
+        submittedIds.add(person.id);
+      }
     }
-    return { submitted: staff.filter((p) => submittedIds.has(p.id)), unsubmitted: staff.filter((p) => !submittedIds.has(p.id)) };
+
+    return {
+      submitted: staff.filter((p) => submittedIds.has(p.id)),
+      unsubmitted: staff.filter((p) => !submittedIds.has(p.id)),
+    };
   }, [staff, days, shifts]);
 
   function copyUnsubmittedStaff() {
