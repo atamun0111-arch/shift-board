@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 );
 
-const SECTIONS = [
+const DEFAULT_SECTIONS = [
   "整理",
   "案内",
   "ケータ",
@@ -18,6 +18,8 @@ const SECTIONS = [
   "楽屋口",
   "ランナー",
 ];
+
+const TEMP_TIME = "仮";
 
 const POSITIONS = [
   "メンツ組",
@@ -105,6 +107,8 @@ export default function Home() {
 
   const [staff, setStaff] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [sectionOptions, setSectionOptions] = useState([]);
+  const [newSectionName, setNewSectionName] = useState("");
   const [admins, setAdmins] = useState([]);
   const [shifts, setShifts] = useState({});
   const [events, setEvents] = useState([]);
@@ -338,6 +342,7 @@ export default function Home() {
         availabilityResult,
         eventResult,
         shiftPeriodResult,
+        sectionResult,
       ] = await Promise.all([
         supabase
           .from("staff")
@@ -375,6 +380,13 @@ export default function Home() {
           .select("*")
           .eq("month", month)
           .maybeSingle(),
+
+        supabase
+          .from("sections")
+          .select("*")
+          .eq("is_active", true)
+          .order("display_order")
+          .order("name"),
       ]);
 
       if (staffResult.error) throw staffResult.error;
@@ -383,6 +395,19 @@ export default function Home() {
       if (availabilityResult.error) throw availabilityResult.error;
       if (eventResult.error) throw eventResult.error;
       if (shiftPeriodResult.error) throw shiftPeriodResult.error;
+      if (sectionResult.error) throw sectionResult.error;
+
+      const loadedSections = sectionResult.data || [];
+      setSectionOptions(
+        loadedSections.length
+          ? loadedSections
+          : DEFAULT_SECTIONS.map((name, index) => ({
+              id: `default-${index}`,
+              name,
+              is_active: true,
+              display_order: index,
+            }))
+      );
 
       const periodRow = shiftPeriodResult.data;
       setShiftPeriod({
@@ -469,7 +494,7 @@ export default function Home() {
             return {
               id: slot.id,
               section: slot.section,
-              time: shortTime(slot.start_time),
+              time: slot.is_temporary ? TEMP_TIME : shortTime(slot.start_time),
               required: Number(slot.required_count),
               stasen: Number(slot.stasen_count || 0),
               assigned: slotAssignments.map(
@@ -1014,6 +1039,81 @@ export default function Home() {
     });
   }
 
+  async function addSectionOption() {
+    const name = newSectionName.trim();
+
+    if (!name) {
+      alert("セクション名を入力してください。");
+      return;
+    }
+
+    if (sectionOptions.some((section) => section.name === name)) {
+      alert("同じセクション名がすでにあります。");
+      return;
+    }
+
+    const nextOrder =
+      sectionOptions.reduce(
+        (max, section) => Math.max(max, Number(section.display_order) || 0),
+        -1
+      ) + 1;
+
+    const { data, error } = await supabase
+      .from("sections")
+      .insert({
+        name,
+        is_active: true,
+        display_order: nextOrder,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("セクションの追加に失敗しました。");
+      return;
+    }
+
+    setSectionOptions((prev) => [...prev, data]);
+    setNewSectionName("");
+  }
+
+  async function deleteSectionOption(section) {
+    const used = events.some((event) =>
+      (event.slots || []).some((slot) => slot.section === section.name)
+    );
+
+    const message = used
+      ? `「${section.name}」は現在の現場で使用中です。\n設定一覧から非表示にしますが、既存の現場データは残ります。続けますか？`
+      : `「${section.name}」をセクション一覧から削除しますか？`;
+
+    if (!window.confirm(message)) return;
+
+    const { error } = await supabase
+      .from("sections")
+      .update({ is_active: false })
+      .eq("id", section.id);
+
+    if (error) {
+      console.error(error);
+      alert("セクションの削除に失敗しました。");
+      return;
+    }
+
+    setSectionOptions((prev) =>
+      prev.filter((item) => item.id !== section.id)
+    );
+
+    setNewSlot((prev) => {
+      if (prev.section !== section.name) return prev;
+      return {
+        ...prev,
+        section:
+          sectionOptions.find((item) => item.id !== section.id)?.name || "",
+      };
+    });
+  }
+
   async function addSlot() {
     if (!selectedEvent) {
       alert("先に現場を選択してください");
@@ -1032,7 +1132,8 @@ export default function Home() {
       .insert({
         event_id: selectedEvent.id,
         section: newSlot.section,
-        start_time: newSlot.time,
+        start_time: newSlot.time === TEMP_TIME ? "00:00" : newSlot.time,
+        is_temporary: newSlot.time === TEMP_TIME,
         required_count: required,
         stasen_count: 0,
       })
@@ -1048,7 +1149,7 @@ export default function Home() {
     const slot = {
       id: data.id,
       section: data.section,
-      time: shortTime(data.start_time),
+      time: data.is_temporary ? TEMP_TIME : shortTime(data.start_time),
       required: Number(data.required_count),
       stasen: Number(data.stasen_count || 0),
       assigned: [],
@@ -1075,7 +1176,8 @@ export default function Home() {
     }
 
     if ("time" in patch) {
-      update.start_time = patch.time;
+      update.start_time = patch.time === TEMP_TIME ? "00:00" : patch.time;
+      update.is_temporary = patch.time === TEMP_TIME;
     }
 
     if ("required" in patch) {
@@ -1195,6 +1297,10 @@ export default function Home() {
 
     if (shift.status === "all") {
       return true;
+    }
+
+    if (time === TEMP_TIME) {
+      return shift.status === "time";
     }
 
     if (
@@ -2332,6 +2438,7 @@ export default function Home() {
           ["events", "現場管理・配置"],
           ["off", "OFF一覧"],
           ["staff", "スタッフ管理"],
+          ["sections", "セクション管理"],
           ["submission", "シフト募集設定"],
           ["admins", "管理者管理"],
         ].map(([id, label]) => (
@@ -3091,17 +3198,13 @@ export default function Home() {
                             })
                           }
                         >
-                          {SECTIONS.map(
+                          {sectionOptions.map(
                             (section) => (
                               <option
-                                key={
-                                  section
-                                }
-                                value={
-                                  section
-                                }
+                                key={section.id}
+                                value={section.name}
                               >
-                                {section}
+                                {section.name}
                               </option>
                             )
                           )}
@@ -3119,7 +3222,7 @@ export default function Home() {
                             })
                           }
                         >
-                          {HOURS.map(
+                          {[TEMP_TIME, ...HOURS].map(
                             (hour) => (
                               <option
                                 key={hour}
@@ -3167,11 +3270,11 @@ export default function Home() {
 
                       {selectedEvent.slots
                         .slice()
-                        .sort((a, b) =>
-                          a.time.localeCompare(
-                            b.time
-                          )
-                        )
+                        .sort((a, b) => {
+                          if (a.time === TEMP_TIME && b.time !== TEMP_TIME) return -1;
+                          if (b.time === TEMP_TIME && a.time !== TEMP_TIME) return 1;
+                          return a.time.localeCompare(b.time);
+                        })
                         .map((slot) => {
                           const visibleStaff =
                             staff.filter(
@@ -3246,24 +3349,27 @@ export default function Home() {
                                     )
                                   }
                                 >
-                                  {SECTIONS.map(
-                                    (
-                                      section
-                                    ) => (
-                                      <option
-                                        key={
-                                          section
-                                        }
-                                        value={
-                                          section
-                                        }
-                                      >
-                                        {
-                                          section
-                                        }
-                                      </option>
+                                  {[
+                                    ...sectionOptions,
+                                    ...(sectionOptions.some(
+                                      (section) =>
+                                        section.name === slot.section
                                     )
-                                  )}
+                                      ? []
+                                      : [
+                                          {
+                                            id: `current-${slot.id}`,
+                                            name: slot.section,
+                                          },
+                                        ]),
+                                  ].map((section) => (
+                                    <option
+                                      key={section.id}
+                                      value={section.name}
+                                    >
+                                      {section.name}
+                                    </option>
+                                  ))}
                                 </select>
 
                                 <select
@@ -3282,7 +3388,7 @@ export default function Home() {
                                     )
                                   }
                                 >
-                                  {HOURS.map(
+                                  {[TEMP_TIME, ...HOURS].map(
                                     (hour) => (
                                       <option
                                         key={
@@ -3973,6 +4079,60 @@ export default function Home() {
                     </div>
                   </div>
                 ))}
+            </div>
+          </>
+        )}
+
+        {tab === "sections" && (
+          <>
+            <div className="card">
+              <h2>セクション管理</h2>
+              <div className="muted">
+                現場管理で使うセクションを追加・削除できます。
+                削除しても、すでに登録済みの現場データは消えません。
+              </div>
+
+              <div className="formRow" style={{ marginTop: 14 }}>
+                <input
+                  value={newSectionName}
+                  onChange={(e) => setNewSectionName(e.target.value)}
+                  placeholder="例：物販、特典会、警備"
+                />
+                <button
+                  className="primary"
+                  onClick={addSectionOption}
+                >
+                  セクション追加
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <h3>現在のセクション</h3>
+
+              {sectionOptions.length === 0 ? (
+                <div className="muted">
+                  セクションがありません。
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {sectionOptions.map((section) => (
+                    <div
+                      key={section.id}
+                      className="staffCard"
+                    >
+                      <strong>{section.name}</strong>
+
+                      <button
+                        className="danger"
+                        onClick={() => deleteSectionOption(section)}
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
