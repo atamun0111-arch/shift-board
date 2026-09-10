@@ -2105,17 +2105,38 @@ export default function Home() {
           color: #6b7280;
         }
 
-        .rankFourPlus {
-          box-shadow: inset 0 -4px 0 #f59e0b;
-        }
-
-        .trainingTarget {
-          box-shadow: inset 0 -4px 0 #3b82f6;
-        }
-
-        .rankFourPlus .personName,
-        .trainingTarget .personName {
+        /* チーム色は名前欄全体の背景として残し、
+           ランク属性は名前ラベルだけで区別する */
+        .rankFourPlus .personName {
+          display: inline-block;
+          max-width: 72px;
+          padding: 3px 5px;
+          border: 2px solid #d97706;
+          border-radius: 7px;
+          background: #fff7cc;
           font-weight: 900;
+          color: #78350f;
+        }
+
+        .trainingTarget .personName {
+          display: inline-block;
+          max-width: 72px;
+          padding: 3px 5px;
+          border: 2px solid #7c3aed;
+          border-radius: 7px;
+          background: #f3e8ff;
+          font-weight: 900;
+          color: #5b21b6;
+        }
+
+        .rankFourPlus .personMeta {
+          font-weight: 800;
+          color: #92400e;
+        }
+
+        .trainingTarget .personMeta {
+          font-weight: 800;
+          color: #6d28d9;
         }
 
         .shiftCell {
@@ -2576,12 +2597,9 @@ export default function Home() {
                               : ""
                           }`}
                           style={{
-                            background:
-                              person.rank === "育成対象"
-                                ? "#dbeafe"
-                                : ["1", "2", "3", "4"].includes(String(person.rank))
-                                  ? "#fef3c7"
-                                  : getTeamColor(person.team_id),
+                            // 背景は必ずチームカラー。
+                            // ランク4以上・育成対象は personName の枠/ラベル色で表現する。
+                            background: getTeamColor(person.team_id),
                           }}
                         >
                           <span className="personName">
