@@ -104,6 +104,7 @@ export default function Home() {
   const [month, setMonth] = useState("2026-09");
 
   const [staff, setStaff] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [shifts, setShifts] = useState({});
   const [events, setEvents] = useState([]);
@@ -119,7 +120,21 @@ export default function Home() {
     grade: "1",
     rank: "無",
     gender: "男性",
+    team_id: "",
   });
+
+  const [editingStaffId, setEditingStaffId] = useState(null);
+  const [editingStaff, setEditingStaff] = useState({
+    name: "",
+    grade: "1",
+    rank: "無",
+    gender: "男性",
+    team_id: "",
+  });
+
+  const [newTeamName, setNewTeamName] = useState("");
+  const [editingTeamId, setEditingTeamId] = useState(null);
+  const [editingTeamName, setEditingTeamName] = useState("");
 
   const [newAdmin, setNewAdmin] = useState("");
 
@@ -216,7 +231,7 @@ export default function Home() {
     setLoggingIn(false);
 
     if (error) {
-      setLoginError(error.message || "ログインに失敗しました。");
+      setLoginError("メールアドレスまたはパスワードが違います。");
     }
   }
 
@@ -224,6 +239,7 @@ export default function Home() {
     await supabase.auth.signOut();
 
     setStaff([]);
+    setTeams([]);
     setAdmins([]);
     setShifts({});
     setEvents([]);
@@ -238,12 +254,19 @@ export default function Home() {
 
       const [
         staffResult,
+        teamResult,
         adminResult,
         availabilityResult,
         eventResult,
       ] = await Promise.all([
         supabase
           .from("staff")
+          .select("*")
+          .eq("is_active", true)
+          .order("name"),
+
+        supabase
+          .from("teams")
           .select("*")
           .eq("is_active", true)
           .order("name"),
@@ -269,16 +292,19 @@ export default function Home() {
       ]);
 
       if (staffResult.error) throw staffResult.error;
+      if (teamResult.error) throw teamResult.error;
       if (adminResult.error) throw adminResult.error;
       if (availabilityResult.error) throw availabilityResult.error;
       if (eventResult.error) throw eventResult.error;
 
       const staffRows = staffResult.data || [];
+      const teamRows = teamResult.data || [];
       const adminRows = adminResult.data || [];
       const availabilityRows = availabilityResult.data || [];
       const eventRows = eventResult.data || [];
 
       setStaff(staffRows);
+      setTeams(teamRows);
       setAdmins(adminRows);
 
       const shiftMap = {};
@@ -469,6 +495,7 @@ export default function Home() {
         grade: newStaff.grade,
         rank: newStaff.rank,
         gender: newStaff.gender,
+        team_id: newStaff.team_id || null,
         is_active: true,
       })
       .select()
@@ -491,7 +518,158 @@ export default function Home() {
       grade: "1",
       rank: "無",
       gender: "男性",
+      team_id: "",
     });
+  }
+
+  function startEditStaff(person) {
+    setEditingStaffId(person.id);
+    setEditingStaff({
+      name: person.name || "",
+      grade: person.grade || "1",
+      rank: person.rank || "無",
+      gender: person.gender || "男性",
+      team_id: person.team_id || "",
+    });
+  }
+
+  function cancelEditStaff() {
+    setEditingStaffId(null);
+    setEditingStaff({
+      name: "",
+      grade: "1",
+      rank: "無",
+      gender: "男性",
+      team_id: "",
+    });
+  }
+
+  async function saveStaff(personId) {
+    if (!editingStaff.name.trim()) {
+      alert("名前を入力してください");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("staff")
+      .update({
+        name: editingStaff.name.trim(),
+        grade: editingStaff.grade,
+        rank: editingStaff.rank,
+        gender: editingStaff.gender,
+        team_id: editingStaff.team_id || null,
+      })
+      .eq("id", personId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("スタッフ情報の更新に失敗しました。");
+      return;
+    }
+
+    setStaff((prev) =>
+      prev
+        .map((person) => (person.id === personId ? data : person))
+        .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+    );
+
+    cancelEditStaff();
+  }
+
+  async function addTeam() {
+    const name = newTeamName.trim();
+
+    if (!name) {
+      alert("チーム名を入力してください");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("teams")
+      .insert({
+        name,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("チーム登録に失敗しました。");
+      return;
+    }
+
+    setTeams((prev) =>
+      [...prev, data].sort((a, b) => a.name.localeCompare(b.name, "ja"))
+    );
+    setNewTeamName("");
+  }
+
+  function startEditTeam(team) {
+    setEditingTeamId(team.id);
+    setEditingTeamName(team.name);
+  }
+
+  function cancelEditTeam() {
+    setEditingTeamId(null);
+    setEditingTeamName("");
+  }
+
+  async function saveTeam(teamId) {
+    const name = editingTeamName.trim();
+
+    if (!name) {
+      alert("チーム名を入力してください");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("teams")
+      .update({ name })
+      .eq("id", teamId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert("チーム名の更新に失敗しました。");
+      return;
+    }
+
+    setTeams((prev) =>
+      prev
+        .map((team) => (team.id === teamId ? data : team))
+        .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+    );
+    cancelEditTeam();
+  }
+
+  async function deleteTeam(team) {
+    const hasMembers = staff.some((person) => person.team_id === team.id);
+
+    if (hasMembers) {
+      alert("このチームには所属スタッフがいます。先にスタッフの所属チームを変更してください。");
+      return;
+    }
+
+    if (!confirm(`${team.name}を削除しますか？`)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("teams")
+      .update({ is_active: false })
+      .eq("id", team.id);
+
+    if (error) {
+      console.error(error);
+      alert("チームの削除に失敗しました。");
+      return;
+    }
+
+    setTeams((prev) => prev.filter((item) => item.id !== team.id));
   }
 
   async function deleteStaff(person) {
@@ -2015,6 +2193,12 @@ export default function Home() {
                             : `${person.grade}年`}
                           {" / "}
                           R{person.rank}
+                          {person.team_id && (
+                            <>
+                              <br />
+                              {teams.find((team) => team.id === person.team_id)?.name || ""}
+                            </>
+                          )}
                         </div>
                       </th>
                     ))}
@@ -3205,9 +3389,11 @@ export default function Home() {
         {tab === "staff" && (
           <>
             <div className="card">
-              <h2>
-                スタッフ管理
-              </h2>
+              <h2>スタッフ管理</h2>
+
+              <div className="muted" style={{ marginBottom: 12 }}>
+                登録後も、名前・学年・ランク・性別・所属チームを変更できます。
+              </div>
 
               <div className="formRow">
                 <input
@@ -3216,8 +3402,7 @@ export default function Home() {
                   onChange={(e) =>
                     setNewStaff({
                       ...newStaff,
-                      name:
-                        e.target.value,
+                      name: e.target.value,
                     })
                   }
                 />
@@ -3227,26 +3412,15 @@ export default function Home() {
                   onChange={(e) =>
                     setNewStaff({
                       ...newStaff,
-                      grade:
-                        e.target.value,
+                      grade: e.target.value,
                     })
                   }
                 >
-                  <option value="1">
-                    1年
-                  </option>
-                  <option value="2">
-                    2年
-                  </option>
-                  <option value="3">
-                    3年
-                  </option>
-                  <option value="4">
-                    4年
-                  </option>
-                  <option value="F">
-                    F
-                  </option>
+                  <option value="1">1年</option>
+                  <option value="2">2年</option>
+                  <option value="3">3年</option>
+                  <option value="4">4年</option>
+                  <option value="F">F</option>
                 </select>
 
                 <select
@@ -3254,100 +3428,325 @@ export default function Home() {
                   onChange={(e) =>
                     setNewStaff({
                       ...newStaff,
-                      rank:
-                        e.target.value,
+                      rank: e.target.value,
                     })
                   }
                 >
-                  <option value="無">
-                    無
-                  </option>
-                  <option value="1">
-                    1
-                  </option>
-                  <option value="2">
-                    2
-                  </option>
-                  <option value="3">
-                    3
-                  </option>
-                  <option value="4">
-                    4
-                  </option>
+                  <option value="無">無</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
                 </select>
 
                 <select
-                  value={
-                    newStaff.gender
-                  }
+                  value={newStaff.gender}
                   onChange={(e) =>
                     setNewStaff({
                       ...newStaff,
-                      gender:
-                        e.target.value,
+                      gender: e.target.value,
                     })
                   }
                 >
-                  <option>
-                    男性
-                  </option>
-                  <option>
-                    女性
-                  </option>
-                  <option>
-                    その他
-                  </option>
+                  <option>男性</option>
+                  <option>女性</option>
+                  <option>その他</option>
                 </select>
 
-                <button
-                  className="primary"
-                  onClick={addStaff}
+                <select
+                  value={newStaff.team_id}
+                  onChange={(e) =>
+                    setNewStaff({
+                      ...newStaff,
+                      team_id: e.target.value,
+                    })
+                  }
                 >
+                  <option value="">チーム未所属</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button className="primary" onClick={addStaff}>
                   追加
                 </button>
               </div>
             </div>
 
-            <div className="staffGrid">
-              {staff.map(
-                (person) => (
-                  <div
-                    className="staffCard"
-                    key={person.id}
-                  >
-                    <div>
-                      <strong>
-                        {
-                          person.name
-                        }
-                      </strong>
+            <div className="card" style={{ marginTop: 16 }}>
+              <h2>チーム管理</h2>
 
-                      <div className="muted">
-                        {person.grade ===
-                        "F"
-                          ? "F"
-                          : `${person.grade}年`}
-                        {" / "}
-                        ランク{" "}
-                        {person.rank}
-                        {" / "}
-                        {person.gender}
-                      </div>
-                    </div>
+              <div className="formRow">
+                <input
+                  placeholder="新しいチーム名"
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addTeam();
+                  }}
+                />
+                <button className="primary" onClick={addTeam}>
+                  チーム追加
+                </button>
+              </div>
 
-                    <button
-                      className="danger"
-                      onClick={() =>
-                        deleteStaff(
-                          person
-                        )
-                      }
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  marginTop: 14,
+                }}
+              >
+                {teams.map((team) => {
+                  const memberCount = staff.filter(
+                    (person) => person.team_id === team.id
+                  ).length;
+
+                  return (
+                    <div
+                      key={team.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        padding: "10px 12px",
+                        border: "1px solid #ddd",
+                        borderRadius: 10,
+                      }}
                     >
-                      削除
-                    </button>
+                      {editingTeamId === team.id ? (
+                        <>
+                          <input
+                            value={editingTeamName}
+                            onChange={(e) => setEditingTeamName(e.target.value)}
+                            style={{ flex: 1 }}
+                          />
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button className="primary" onClick={() => saveTeam(team.id)}>
+                              保存
+                            </button>
+                            <button onClick={cancelEditTeam}>キャンセル</button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <strong>{team.name}</strong>
+                            <div className="muted">{memberCount}人</div>
+                          </div>
+
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => startEditTeam(team)}>
+                              名前変更
+                            </button>
+                            <button
+                              className="danger"
+                              onClick={() => deleteTeam(team)}
+                            >
+                              削除
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {teams.length === 0 && (
+                  <div className="muted">チームがまだ登録されていません。</div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              {[
+                ...teams.map((team) => ({
+                  id: team.id,
+                  name: team.name,
+                  members: staff
+                    .filter((person) => person.team_id === team.id)
+                    .sort((a, b) => a.name.localeCompare(b.name, "ja")),
+                })),
+                {
+                  id: "__unassigned__",
+                  name: "チーム未所属",
+                  members: staff
+                    .filter((person) => !person.team_id)
+                    .sort((a, b) => a.name.localeCompare(b.name, "ja")),
+                },
+              ]
+                .filter((group) => group.members.length > 0)
+                .map((group) => (
+                  <div key={group.id} style={{ marginBottom: 22 }}>
+                    <h3 style={{ margin: "0 0 10px" }}>
+                      {group.name}
+                      <span
+                        className="muted"
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 400,
+                          marginLeft: 8,
+                        }}
+                      >
+                        {group.members.length}人
+                      </span>
+                    </h3>
+
+                    <div className="staffGrid">
+                      {group.members.map((person) => (
+                        <div className="staffCard" key={person.id}>
+                          {editingStaffId === person.id ? (
+                            <div style={{ width: "100%" }}>
+                              <div
+                                style={{
+                                  display: "grid",
+                                  gridTemplateColumns:
+                                    "minmax(120px, 1.5fr) repeat(4, minmax(90px, 1fr))",
+                                  gap: 8,
+                                }}
+                              >
+                                <input
+                                  value={editingStaff.name}
+                                  onChange={(e) =>
+                                    setEditingStaff({
+                                      ...editingStaff,
+                                      name: e.target.value,
+                                    })
+                                  }
+                                />
+
+                                <select
+                                  value={editingStaff.grade}
+                                  onChange={(e) =>
+                                    setEditingStaff({
+                                      ...editingStaff,
+                                      grade: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="1">1年</option>
+                                  <option value="2">2年</option>
+                                  <option value="3">3年</option>
+                                  <option value="4">4年</option>
+                                  <option value="F">F</option>
+                                </select>
+
+                                <select
+                                  value={editingStaff.rank}
+                                  onChange={(e) =>
+                                    setEditingStaff({
+                                      ...editingStaff,
+                                      rank: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="無">ランク無</option>
+                                  <option value="1">ランク1</option>
+                                  <option value="2">ランク2</option>
+                                  <option value="3">ランク3</option>
+                                  <option value="4">ランク4</option>
+                                </select>
+
+                                <select
+                                  value={editingStaff.gender}
+                                  onChange={(e) =>
+                                    setEditingStaff({
+                                      ...editingStaff,
+                                      gender: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option>男性</option>
+                                  <option>女性</option>
+                                  <option>その他</option>
+                                </select>
+
+                                <select
+                                  value={editingStaff.team_id}
+                                  onChange={(e) =>
+                                    setEditingStaff({
+                                      ...editingStaff,
+                                      team_id: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="">チーム未所属</option>
+                                  {teams.map((team) => (
+                                    <option key={team.id} value={team.id}>
+                                      {team.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 8,
+                                  marginTop: 10,
+                                }}
+                              >
+                                <button
+                                  className="primary"
+                                  onClick={() => saveStaff(person.id)}
+                                >
+                                  保存
+                                </button>
+                                <button onClick={cancelEditStaff}>
+                                  キャンセル
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div>
+                                <strong>{person.name}</strong>
+
+                                <div className="muted">
+                                  {person.grade === "F"
+                                    ? "F"
+                                    : `${person.grade}年`}
+                                  {" / "}
+                                  ランク {person.rank}
+                                  {" / "}
+                                  {person.gender}
+                                </div>
+
+                                <div className="muted" style={{ marginTop: 3 }}>
+                                  所属：
+                                  {teams.find((team) => team.id === person.team_id)
+                                    ?.name || "チーム未所属"}
+                                </div>
+                              </div>
+
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 6,
+                                  alignItems: "center",
+                                }}
+                              >
+                                <button onClick={() => startEditStaff(person)}>
+                                  編集
+                                </button>
+                                <button
+                                  className="danger"
+                                  onClick={() => deleteStaff(person)}
+                                >
+                                  削除
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )
-              )}
+                ))}
             </div>
           </>
         )}
