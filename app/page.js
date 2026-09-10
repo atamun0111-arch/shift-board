@@ -211,6 +211,77 @@ export default function Home() {
   const selectedEvent =
     events.find((event) => event.id === selectedEventId) || null;
 
+  const teamColors = [
+    "#dbeafe",
+    "#dcfce7",
+    "#fef3c7",
+    "#ede9fe",
+    "#fce7f3",
+    "#cffafe",
+    "#ffedd5",
+    "#e0e7ff",
+  ];
+
+  const boardStaff = useMemo(() => {
+    const teamIndex = new Map(
+      teams.map((team, index) => [team.id, index])
+    );
+
+    return [...staff].sort((a, b) => {
+      const aIndex = a.team_id
+        ? (teamIndex.get(a.team_id) ?? 9998)
+        : 9999;
+      const bIndex = b.team_id
+        ? (teamIndex.get(b.team_id) ?? 9998)
+        : 9999;
+
+      if (aIndex !== bIndex) return aIndex - bIndex;
+
+      return a.name.localeCompare(b.name, "ja");
+    });
+  }, [staff, teams]);
+
+  const boardTeamGroups = useMemo(() => {
+    const groups = [];
+
+    for (const person of boardStaff) {
+      const teamId = person.team_id || "__unassigned__";
+      const team =
+        teams.find((item) => item.id === person.team_id) || null;
+      const last = groups[groups.length - 1];
+
+      if (!last || last.id !== teamId) {
+        groups.push({
+          id: teamId,
+          name: team ? team.name : "チーム未所属",
+          members: [person],
+          color: team
+            ? teamColors[
+                Math.max(
+                  0,
+                  teams.findIndex((item) => item.id === team.id)
+                ) % teamColors.length
+              ]
+            : "#e5e7eb",
+        });
+      } else {
+        last.members.push(person);
+      }
+    }
+
+    return groups;
+  }, [boardStaff, teams]);
+
+  function getTeamColor(teamId) {
+    if (!teamId) return "#e5e7eb";
+
+    const index = teams.findIndex((team) => team.id === teamId);
+
+    if (index < 0) return "#e5e7eb";
+
+    return teamColors[index % teamColors.length];
+  }
+
   useEffect(() => {
     if (!selectedEventId) return;
 
@@ -1764,11 +1835,39 @@ export default function Home() {
           font-size: 9px;
         }
 
+        .teamGroupRow th {
+          top: 0;
+        }
+
+        .teamGroupHead {
+          height: 28px;
+          padding: 4px 6px !important;
+          font-size: 11px;
+          font-weight: 900;
+          white-space: nowrap;
+          border-bottom: 2px solid #9ca3af !important;
+        }
+
+        .teamGroupCount {
+          margin-left: 5px;
+          font-size: 9px;
+          font-weight: 700;
+          opacity: 0.65;
+        }
+
+        .personHeaderRow th {
+          top: 28px;
+        }
+
         .personHead {
           width: 78px;
           min-width: 78px;
           max-width: 78px;
           padding: 5px 2px !important;
+        }
+
+        .teamStart {
+          border-left: 3px solid #6b7280 !important;
         }
 
         .personName {
@@ -2170,38 +2269,71 @@ export default function Home() {
               {month.replace("-", "年")}月 シフト表
             </h2>
 
+            <div
+              className="muted"
+              style={{ marginBottom: 8 }}
+            >
+              スタッフは所属チームごとに並び、チームごとに色分けされています。
+            </div>
+
             <div className="boardWrap">
               <table className="shiftTable">
                 <thead>
-                  <tr>
-                    <th className="dateHead">
+                  <tr className="teamGroupRow">
+                    <th className="dateHead" rowSpan={2}>
                       日付・現場
                     </th>
 
-                    {staff.map((person) => (
+                    {boardTeamGroups.map((group) => (
                       <th
-                        key={person.id}
-                        className="personHead"
+                        key={group.id}
+                        className="teamGroupHead"
+                        colSpan={group.members.length}
+                        style={{
+                          background: group.color,
+                        }}
                       >
-                        <span className="personName">
-                          {person.name}
+                        {group.name}
+                        <span className="teamGroupCount">
+                          {group.members.length}人
                         </span>
-
-                        <div className="personMeta">
-                          {person.grade === "F"
-                            ? "F"
-                            : `${person.grade}年`}
-                          {" / "}
-                          R{person.rank}
-                          {person.team_id && (
-                            <>
-                              <br />
-                              {teams.find((team) => team.id === person.team_id)?.name || ""}
-                            </>
-                          )}
-                        </div>
                       </th>
                     ))}
+                  </tr>
+
+                  <tr className="personHeaderRow">
+                    {boardStaff.map((person, index) => {
+                      const previous =
+                        index > 0 ? boardStaff[index - 1] : null;
+                      const isTeamStart =
+                        index === 0 ||
+                        (previous?.team_id || "") !==
+                          (person.team_id || "");
+
+                      return (
+                        <th
+                          key={person.id}
+                          className={`personHead ${
+                            isTeamStart ? "teamStart" : ""
+                          }`}
+                          style={{
+                            background: getTeamColor(person.team_id),
+                          }}
+                        >
+                          <span className="personName">
+                            {person.name}
+                          </span>
+
+                          <div className="personMeta">
+                            {person.grade === "F"
+                              ? "F"
+                              : `${person.grade}年`}
+                            {" / "}
+                            R{person.rank}
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
 
@@ -2311,9 +2443,18 @@ export default function Home() {
                           )}
                         </td>
 
-                        {staff.map((person) => {
+                        {boardStaff.map((person, personIndex) => {
                           const key =
                             `${person.id}|${date}`;
+
+                          const previousPerson =
+                            personIndex > 0
+                              ? boardStaff[personIndex - 1]
+                              : null;
+                          const isTeamStart =
+                            personIndex === 0 ||
+                            (previousPerson?.team_id || "") !==
+                              (person.team_id || "");
 
                           const shift =
                             shifts[key] ||
@@ -2329,7 +2470,7 @@ export default function Home() {
                           return (
                             <td
                               key={person.id}
-                              className="shiftCell"
+                              className={`shiftCell ${isTeamStart ? "teamStart" : ""}`}
                             >
                               <button
                                 className={`cellButton ${statusClass(
