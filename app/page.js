@@ -138,6 +138,14 @@ export default function Home() {
 
   const [newAdmin, setNewAdmin] = useState("");
 
+  const [shiftPeriod, setShiftPeriod] = useState({
+    submission_start: "",
+    submission_end: "",
+    is_locked: false,
+    submission_token: "",
+  });
+  const [savingShiftPeriod, setSavingShiftPeriod] = useState(false);
+
   const [newEvent, setNewEvent] = useState({
     date: "2026-09-01",
     eventName: "",
@@ -329,6 +337,7 @@ export default function Home() {
         adminResult,
         availabilityResult,
         eventResult,
+        shiftPeriodResult,
       ] = await Promise.all([
         supabase
           .from("staff")
@@ -360,6 +369,12 @@ export default function Home() {
           .gte("event_date", firstDate)
           .lte("event_date", lastDate)
           .order("event_date"),
+
+        supabase
+          .from("shift_periods")
+          .select("*")
+          .eq("month", month)
+          .maybeSingle(),
       ]);
 
       if (staffResult.error) throw staffResult.error;
@@ -367,6 +382,15 @@ export default function Home() {
       if (adminResult.error) throw adminResult.error;
       if (availabilityResult.error) throw availabilityResult.error;
       if (eventResult.error) throw eventResult.error;
+      if (shiftPeriodResult.error) throw shiftPeriodResult.error;
+
+      const periodRow = shiftPeriodResult.data;
+      setShiftPeriod({
+        submission_start: periodRow?.submission_start || `${month}-01`,
+        submission_end: periodRow?.submission_end || lastDate,
+        is_locked: !!periodRow?.is_locked,
+        submission_token: periodRow?.submission_token || "",
+      });
 
       const staffRows = staffResult.data || [];
       const teamRows = teamResult.data || [];
@@ -489,6 +513,66 @@ export default function Home() {
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function saveShiftPeriod() {
+    if (!shiftPeriod.submission_start || !shiftPeriod.submission_end) {
+      alert("提出開始日と提出締切日を入力してください。");
+      return;
+    }
+
+    if (shiftPeriod.submission_start > shiftPeriod.submission_end) {
+      alert("提出締切日は提出開始日以降にしてください。");
+      return;
+    }
+
+    setSavingShiftPeriod(true);
+
+    const payload = {
+      month,
+      submission_start: shiftPeriod.submission_start,
+      submission_end: shiftPeriod.submission_end,
+      is_locked: !!shiftPeriod.is_locked,
+    };
+
+    const { data, error } = await supabase
+      .from("shift_periods")
+      .upsert(payload, { onConflict: "month" })
+      .select()
+      .single();
+
+    setSavingShiftPeriod(false);
+
+    if (error) {
+      console.error(error);
+      alert("シフト募集設定の保存に失敗しました。");
+      return;
+    }
+
+    setShiftPeriod({
+      submission_start: data.submission_start || "",
+      submission_end: data.submission_end || "",
+      is_locked: !!data.is_locked,
+      submission_token: data.submission_token || "",
+    });
+
+    alert("シフト募集設定を保存しました！");
+  }
+
+  async function copyStaffSubmissionUrl() {
+    if (!shiftPeriod.submission_token) {
+      alert("先に「設定を保存」を押してください。");
+      return;
+    }
+
+    const url = `${window.location.origin}/staff?token=${shiftPeriod.submission_token}`;
+
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("スタッフ提出URLをコピーしました！");
+    } catch {
+      window.prompt("このURLをコピーしてください", url);
     }
   }
 
@@ -2248,6 +2332,7 @@ export default function Home() {
           ["events", "現場管理・配置"],
           ["off", "OFF一覧"],
           ["staff", "スタッフ管理"],
+          ["submission", "シフト募集設定"],
           ["admins", "管理者管理"],
         ].map(([id, label]) => (
           <button
@@ -3888,6 +3973,100 @@ export default function Home() {
                     </div>
                   </div>
                 ))}
+            </div>
+          </>
+        )}
+
+        {tab === "submission" && (
+          <>
+            <div className="card">
+              <h2>シフト募集設定</h2>
+              <div className="muted">
+                {month.replace("-", "年")}月のスタッフ提出期間とロックを設定します。
+              </div>
+
+              <div className="formRow" style={{ marginTop: 14 }}>
+                <label>
+                  <div className="muted">提出開始日</div>
+                  <input
+                    type="date"
+                    value={shiftPeriod.submission_start}
+                    onChange={(e) =>
+                      setShiftPeriod((prev) => ({
+                        ...prev,
+                        submission_start: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label>
+                  <div className="muted">提出締切日</div>
+                  <input
+                    type="date"
+                    value={shiftPeriod.submission_end}
+                    onChange={(e) =>
+                      setShiftPeriod((prev) => ({
+                        ...prev,
+                        submission_end: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label className="checkRow" style={{ paddingTop: 16 }}>
+                  <input
+                    type="checkbox"
+                    checked={shiftPeriod.is_locked}
+                    onChange={(e) =>
+                      setShiftPeriod((prev) => ({
+                        ...prev,
+                        is_locked: e.target.checked,
+                      }))
+                    }
+                  />
+                  🔒 強制ロック
+                </label>
+
+                <button
+                  className="primary"
+                  onClick={saveShiftPeriod}
+                  disabled={savingShiftPeriod}
+                >
+                  {savingShiftPeriod ? "保存中..." : "設定を保存"}
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <h3>スタッフ提出URL</h3>
+              <div className="muted" style={{ marginBottom: 10 }}>
+                このURLをスタッフ全員に共有してください。スタッフはログイン不要で、自分の名前を選んで提出できます。
+              </div>
+
+              {shiftPeriod.submission_token ? (
+                <>
+                  <div
+                    style={{
+                      padding: 10,
+                      background: "#f3f4f6",
+                      borderRadius: 8,
+                      wordBreak: "break-all",
+                      fontSize: 12,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {`${typeof window !== "undefined" ? window.location.origin : ""}/staff?token=${shiftPeriod.submission_token}`}
+                  </div>
+                  <button className="primary" onClick={copyStaffSubmissionUrl}>
+                    URLをコピー
+                  </button>
+                </>
+              ) : (
+                <div className="muted">
+                  この月はまだ募集設定がありません。「設定を保存」を押すとURLが発行されます。
+                </div>
+              )}
             </div>
           </>
         )}
