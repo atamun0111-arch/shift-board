@@ -1791,7 +1791,7 @@ export default function Home() {
           className="loginBox"
           onSubmit={login}
         >
-          <h1>3班現場割</h1>
+          <h1>3班現場割 ver1.2</h1>
 
           <p>管理者ログイン</p>
 
@@ -2506,7 +2506,7 @@ export default function Home() {
 
       <header className="topbar">
         <div className="brand">
-          <h1>3班現場割</h1>
+          <h1>3班現場割 ver1.2</h1>
 
           <p>
             イベントスタッフ シフト・配置管理
