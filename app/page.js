@@ -1,3 +1,4 @@
+```
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -391,11 +392,36 @@ export default function Home() {
           .eq("is_active", true)
           .order("name"),
 
-        supabase
-          .from("availability")
-          .select("*")
-          .gte("work_date", firstDate)
-          .lte("work_date", lastDate),
+        (async () => {
+          // Supabase は1回の取得件数に上限があるため、
+          // 月内のシフト回答を1000件ずつ最後まで取得する。
+          const allRows = [];
+          const pageSize = 1000;
+
+          for (let from = 0; ; from += pageSize) {
+            const { data, error } = await supabase
+              .from("availability")
+              .select("*")
+              .gte("work_date", firstDate)
+              .lte("work_date", lastDate)
+              .order("work_date", { ascending: true })
+              .order("staff_id", { ascending: true })
+              .range(from, from + pageSize - 1);
+
+            if (error) {
+              return { data: null, error };
+            }
+
+            const rows = data || [];
+            allRows.push(...rows);
+
+            if (rows.length < pageSize) {
+              break;
+            }
+          }
+
+          return { data: allRows, error: null };
+        })(),
 
         supabase
           .from("events")
@@ -4447,3 +4473,4 @@ export default function Home() {
     </main>
   );
 }
+```
