@@ -2158,6 +2158,26 @@ export default function Home() {
           color: #6b7280;
         }
 
+
+        .assignedEventLabel {
+          display: block;
+          margin-top: 3px;
+          padding: 2px 3px;
+          border-radius: 4px;
+          background: rgba(255, 255, 255, 0.78);
+          color: #1d4ed8;
+          font-size: 8px;
+          font-weight: 800;
+          line-height: 1.2;
+          white-space: normal;
+          word-break: break-word;
+        }
+
+        .assignedEventLabel.noAssignedEvent {
+          color: #9ca3af;
+          font-weight: 600;
+        }
+
         .negotiatedMark {
           display: block;
           margin-top: 1px;
@@ -2705,6 +2725,18 @@ export default function Home() {
                                 shift.negotiatedBy
                             );
 
+                          const assignedEventNames =
+                            dateEvents
+                              .filter((event) =>
+                                (event.slots || []).some(
+                                  (slot) =>
+                                    (slot.assigned || []).includes(
+                                      person.id
+                                    )
+                                )
+                              )
+                              .map((event) => event.eventName);
+
                           return (
                             <td
                               key={person.id}
@@ -2726,6 +2758,18 @@ export default function Home() {
                                   {compactLabel(
                                     shift
                                   )}
+                                </span>
+
+                                <span
+                                  className={`assignedEventLabel ${
+                                    assignedEventNames.length === 0
+                                      ? "noAssignedEvent"
+                                      : ""
+                                  }`}
+                                >
+                                  {assignedEventNames.length > 0
+                                    ? assignedEventNames.join(" / ")
+                                    : "現場選択なし"}
                                 </span>
 
                                 {shift.negotiated && (
