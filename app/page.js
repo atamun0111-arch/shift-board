@@ -2607,13 +2607,14 @@ export default function Home() {
 
         /* 月間シフト：情報の優先順位を整理 */
         .boardWrap {
-          height: auto;
-          min-height: 0;
-          overflow-x: auto;
-          overflow-y: visible;
+          overflow: auto;
+          height: calc(100vh - 205px);
+          min-height: 540px;
           border: 1px solid #dfe4ec;
           border-radius: 14px;
           box-shadow: var(--shadow);
+          background: white;
+          position: relative;
         }
 
         .shiftTable th,
@@ -2623,7 +2624,27 @@ export default function Home() {
           padding: 4px;
         }
 
+        .shiftTable th {
+          position: sticky;
+          top: 0;
+          z-index: 20;
+        }
+
+        .teamGroupRow th {
+          top: 0;
+          z-index: 22;
+        }
+
+        .personHeaderRow th {
+          top: 32px;
+          z-index: 21;
+        }
+
         .dateHead {
+          position: sticky !important;
+          top: 0 !important;
+          left: 0;
+          z-index: 40 !important;
           width: 205px;
           min-width: 205px;
           padding: 10px !important;
@@ -2632,6 +2653,9 @@ export default function Home() {
         }
 
         .dateCell {
+          position: sticky;
+          left: 0;
+          z-index: 18;
           width: 205px;
           min-width: 205px;
           padding: 9px 10px !important;
@@ -2697,6 +2721,19 @@ export default function Home() {
           margin-top: 3px;
           font-size: 8px;
           opacity: .78;
+        }
+
+        .rankFourPlus {
+          box-shadow: inset 0 -4px 0 #f59e0b;
+        }
+
+        .trainingTarget {
+          box-shadow: inset 0 -4px 0 #3b82f6;
+        }
+
+        .rankFourPlus .personName,
+        .trainingTarget .personName {
+          font-weight: 900;
         }
 
         .teamStart {
@@ -3004,6 +3041,14 @@ export default function Home() {
                           key={person.id}
                           className={`personHead ${
                             isTeamStart ? "teamStart" : ""
+                          } ${
+                            ["1", "2", "3", "4"].includes(String(person.rank))
+                              ? "rankFourPlus"
+                              : ""
+                          } ${
+                            person.rank === "育成対象"
+                              ? "trainingTarget"
+                              : ""
                           }`}
                           style={{
                             background: getTeamColor(person.team_id),
