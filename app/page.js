@@ -540,6 +540,8 @@ export default function Home() {
           date: event.event_date,
           eventName: event.event_name,
           venueName: event.venue_name,
+          orderConfirmed: !!event.order_confirmed,
+          orderConfirmedAt: event.order_confirmed_at || "",
           slots: eventSlots,
         };
       });
@@ -996,6 +998,8 @@ export default function Home() {
         date: data.event_date,
         eventName: data.event_name,
         venueName: data.venue_name,
+        orderConfirmed: !!data.order_confirmed,
+        orderConfirmedAt: data.order_confirmed_at || "",
         slots: [],
       };
 
@@ -1008,6 +1012,62 @@ export default function Home() {
       eventName: "",
       venueName: "",
     }));
+  }
+
+  async function setEventOrderConfirmed(eventId, confirmed) {
+    const event = events.find((item) => item.id === eventId);
+    if (!event) return;
+
+    if (confirmed) {
+      if ((event.slots || []).length === 0) {
+        alert("セクションが1つも登録されていません。");
+        return;
+      }
+
+      if (
+        !confirm(
+          "この現場を発注確定にしますか？\n確定後、セクション・時間・必要人数・スタセン人数は「変更する」を押すまで編集できません。"
+        )
+      ) {
+        return;
+      }
+    } else {
+      if (
+        !confirm(
+          "発注確定を解除して、セクション等を変更できる状態に戻しますか？"
+        )
+      ) {
+        return;
+      }
+    }
+
+    const confirmedAt = confirmed ? new Date().toISOString() : null;
+
+    const { error } = await supabase
+      .from("events")
+      .update({
+        order_confirmed: confirmed,
+        order_confirmed_at: confirmedAt,
+      })
+      .eq("id", eventId);
+
+    if (error) {
+      console.error(error);
+      alert("発注確定状態の更新に失敗しました。");
+      return;
+    }
+
+    setEvents((prev) =>
+      prev.map((item) =>
+        item.id === eventId
+          ? {
+              ...item,
+              orderConfirmed: confirmed,
+              orderConfirmedAt: confirmedAt || "",
+            }
+          : item
+      )
+    );
   }
 
   async function updateEventField(eventId, field, value) {
@@ -2786,6 +2846,81 @@ export default function Home() {
           color: #555f70;
         }
 
+        .orderBadge {
+          display: inline-flex;
+          align-items: center;
+          margin-left: 6px;
+          padding: 3px 7px;
+          border-radius: 999px;
+          background: #dcfce7;
+          color: #166534;
+          font-size: 9px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
+        .orderPendingBadge {
+          display: inline-flex;
+          align-items: center;
+          margin-left: 6px;
+          padding: 3px 7px;
+          border-radius: 999px;
+          background: #f3f4f6;
+          color: #6b7280;
+          font-size: 9px;
+          font-weight: 800;
+          white-space: nowrap;
+        }
+
+        .orderConfirmPanel {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 14px;
+          padding: 14px 16px;
+          border: 1px solid #86efac;
+          border-radius: 13px;
+          background: #f0fdf4;
+        }
+
+        .orderConfirmPanel.pending {
+          border-color: #e5e7eb;
+          background: #f9fafb;
+        }
+
+        .confirmOrderButton {
+          min-height: 40px;
+          border: 0;
+          border-radius: 9px;
+          padding: 9px 16px;
+          background: #15803d;
+          color: white;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .reopenOrderButton {
+          min-height: 40px;
+          border: 1px solid #d1d5db;
+          border-radius: 9px;
+          padding: 9px 16px;
+          background: white;
+          color: #374151;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .lockedControl {
+          opacity: .58;
+        }
+
+        .lockedControl input,
+        .lockedControl select,
+        .lockedControl button {
+          cursor: not-allowed;
+        }
+
         /* 現場管理 */
         .eventLayout {
           grid-template-columns: 280px minmax(0, 1fr);
@@ -3168,6 +3303,11 @@ export default function Home() {
                                       event.eventName
                                     }
                                   </strong>
+                                  {event.orderConfirmed ? (
+                                    <span className="orderBadge">✓ 発注確定</span>
+                                  ) : (
+                                    <span className="orderPendingBadge">未確定</span>
+                                  )}
                                   {" "}
                                   必要
                                   {eventRequired}人
@@ -3583,6 +3723,11 @@ export default function Home() {
                             "/"
                           )}{" "}
                         {event.eventName}
+                        {event.orderConfirmed ? (
+                          <span className="orderBadge">✓ 発注確定</span>
+                        ) : (
+                          <span className="orderPendingBadge">未確定</span>
+                        )}
                       </strong>
 
                       <div className="muted">
@@ -3595,6 +3740,45 @@ export default function Home() {
               <div>
                 {selectedEvent && (
                   <>
+                    <div
+                      className={`orderConfirmPanel ${
+                        selectedEvent.orderConfirmed ? "" : "pending"
+                      }`}
+                    >
+                      <div>
+                        <strong>
+                          {selectedEvent.orderConfirmed
+                            ? "✓ 発注確定済み"
+                            : "発注未確定"}
+                        </strong>
+                        <div className="muted" style={{ marginTop: 3 }}>
+                          {selectedEvent.orderConfirmed
+                            ? "セクション・時間・必要人数・スタセン人数を固定中です。スタッフ配置はそのまま変更できます。"
+                            : "発注内容が決まったら確定してください。"}
+                        </div>
+                      </div>
+
+                      {selectedEvent.orderConfirmed ? (
+                        <button
+                          className="reopenOrderButton"
+                          onClick={() =>
+                            setEventOrderConfirmed(selectedEvent.id, false)
+                          }
+                        >
+                          変更する
+                        </button>
+                      ) : (
+                        <button
+                          className="confirmOrderButton"
+                          onClick={() =>
+                            setEventOrderConfirmed(selectedEvent.id, true)
+                          }
+                        >
+                          発注確定
+                        </button>
+                      )}
+                    </div>
+
                     <div className="card">
                       <h3>
                         現場情報編集
@@ -3606,6 +3790,7 @@ export default function Home() {
                           value={
                             selectedEvent.date
                           }
+                          disabled={selectedEvent.orderConfirmed}
                           onChange={(e) =>
                             updateEventField(
                               selectedEvent.id,
@@ -3619,6 +3804,7 @@ export default function Home() {
                           value={
                             selectedEvent.eventName
                           }
+                          disabled={selectedEvent.orderConfirmed}
                           onChange={(e) =>
                             updateEventField(
                               selectedEvent.id,
@@ -3632,6 +3818,7 @@ export default function Home() {
                           value={
                             selectedEvent.venueName
                           }
+                          disabled={selectedEvent.orderConfirmed}
                           onChange={(e) =>
                             updateEventField(
                               selectedEvent.id,
@@ -3643,6 +3830,7 @@ export default function Home() {
 
                         <button
                           className="danger"
+                          disabled={selectedEvent.orderConfirmed}
                           onClick={() =>
                             deleteEvent(
                               selectedEvent.id
@@ -3746,13 +3934,14 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="card">
+                    <div className={`card ${selectedEvent.orderConfirmed ? "lockedControl" : ""}`}>
                       <h3>
                         セクション追加
                       </h3>
 
                       <div className="formRow">
                         <select
+                          disabled={selectedEvent.orderConfirmed}
                           value={
                             newSlot.section
                           }
@@ -3777,6 +3966,7 @@ export default function Home() {
                         </select>
 
                         <select
+                          disabled={selectedEvent.orderConfirmed}
                           value={
                             newSlot.time
                           }
@@ -3801,6 +3991,7 @@ export default function Home() {
                         </select>
 
                         <input
+                          disabled={selectedEvent.orderConfirmed}
                           type="number"
                           min="1"
                           value={
@@ -3817,6 +4008,7 @@ export default function Home() {
 
                         <button
                           className="primary"
+                          disabled={selectedEvent.orderConfirmed}
                           onClick={addSlot}
                         >
                           追加
@@ -3898,8 +4090,9 @@ export default function Home() {
                               className="slot"
                               key={slot.id}
                             >
-                              <div className="slotEdit">
+                              <div className={`slotEdit ${selectedEvent.orderConfirmed ? "lockedControl" : ""}`}>
                                 <select
+                                  disabled={selectedEvent.orderConfirmed}
                                   value={
                                     slot.section
                                   }
@@ -3939,6 +4132,7 @@ export default function Home() {
                                 </select>
 
                                 <select
+                                  disabled={selectedEvent.orderConfirmed}
                                   value={
                                     slot.time
                                   }
@@ -3971,6 +4165,7 @@ export default function Home() {
                                 </select>
 
                                 <input
+                                  disabled={selectedEvent.orderConfirmed}
                                   type="number"
                                   min="1"
                                   value={
@@ -3994,6 +4189,7 @@ export default function Home() {
 
                                 <button
                                   className="danger"
+                                  disabled={selectedEvent.orderConfirmed}
                                   onClick={() =>
                                     deleteSlot(
                                       selectedEvent.id,
@@ -4011,6 +4207,7 @@ export default function Home() {
                                 </strong>
 
                                 <input
+                                  disabled={selectedEvent.orderConfirmed}
                                   type="number"
                                   min="0"
                                   value={stasen}
