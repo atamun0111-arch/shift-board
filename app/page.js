@@ -2426,6 +2426,405 @@ export default function Home() {
           font-size: 11px;
         }
 
+
+        /* ===== 3班現場割 UI Renewal ===== */
+        :root {
+          --ink: #172033;
+          --sub: #687386;
+          --line: #e7eaf0;
+          --surface: #ffffff;
+          --surface-soft: #f7f8fb;
+          --accent: #315efb;
+          --accent-soft: #eef3ff;
+          --danger: #d9485f;
+          --shadow: 0 8px 28px rgba(24, 32, 51, 0.07);
+        }
+
+        body {
+          background: #f4f6f9;
+          color: var(--ink);
+        }
+
+        .topbar {
+          position: relative;
+          z-index: 40;
+          min-height: 72px;
+          padding: 14px 22px;
+          background: #101827;
+          box-shadow: 0 2px 12px rgba(15, 23, 42, 0.16);
+        }
+
+        .brand h1 {
+          font-size: 23px;
+          letter-spacing: .02em;
+        }
+
+        .brand p {
+          margin-top: 5px;
+          color: #aeb8ca;
+          letter-spacing: .04em;
+        }
+
+        .month {
+          min-height: 40px;
+          padding: 9px 12px;
+          border: 1px solid rgba(255,255,255,.12);
+          box-shadow: none;
+        }
+
+        .logout {
+          min-height: 40px;
+          padding: 8px 14px;
+          border-color: #445067;
+          transition: .15s ease;
+        }
+
+        .logout:hover {
+          background: rgba(255,255,255,.08);
+        }
+
+        .tabs {
+          top: 0;
+          gap: 7px;
+          padding: 10px 18px;
+          background: rgba(255,255,255,.96);
+          backdrop-filter: blur(10px);
+          border-bottom: 1px solid var(--line);
+          box-shadow: 0 2px 8px rgba(24,32,51,.035);
+        }
+
+        .tab {
+          min-height: 38px;
+          padding: 8px 14px;
+          border: 1px solid transparent;
+          border-radius: 10px;
+          background: #f1f3f6;
+          color: #394255;
+          font-size: 13px;
+          transition: .15s ease;
+        }
+
+        .tab:hover {
+          background: #e9edf3;
+        }
+
+        .tab.active {
+          background: #172033;
+          color: white;
+          box-shadow: 0 4px 12px rgba(23,32,51,.18);
+        }
+
+        .content {
+          max-width: 1920px;
+          padding: 20px;
+        }
+
+        .content > h2,
+        .content > div > h2 {
+          color: var(--ink);
+          letter-spacing: -.02em;
+        }
+
+        .card {
+          padding: 20px;
+          margin-bottom: 16px;
+          border: 1px solid var(--line);
+          border-radius: 16px;
+          box-shadow: var(--shadow);
+        }
+
+        .muted {
+          color: var(--sub);
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        input,
+        select {
+          min-height: 40px;
+          padding: 9px 11px;
+          border-color: #d9dee7;
+          border-radius: 9px;
+          color: var(--ink);
+          outline: none;
+          transition: border-color .15s ease, box-shadow .15s ease;
+        }
+
+        input:focus,
+        select:focus {
+          border-color: #7d9cff;
+          box-shadow: 0 0 0 3px rgba(49,94,251,.11);
+        }
+
+        .primary {
+          min-height: 40px;
+          padding: 9px 15px;
+          border-radius: 9px;
+          background: var(--accent);
+          box-shadow: 0 3px 9px rgba(49,94,251,.20);
+        }
+
+        .primary:hover {
+          filter: brightness(.97);
+        }
+
+        .danger {
+          min-height: 38px;
+          border-radius: 9px;
+          background: #fff0f2;
+          color: #c8324d;
+        }
+
+        /* 月間シフト：情報の優先順位を整理 */
+        .boardWrap {
+          height: calc(100vh - 205px);
+          min-height: 540px;
+          border: 1px solid #dfe4ec;
+          border-radius: 14px;
+          box-shadow: var(--shadow);
+        }
+
+        .shiftTable th,
+        .shiftTable td {
+          border-right-color: #e8ebf0;
+          border-bottom-color: #e8ebf0;
+          padding: 4px;
+        }
+
+        .dateHead {
+          width: 205px;
+          min-width: 205px;
+          padding: 10px !important;
+          background: #f1f4f8 !important;
+          font-size: 13px;
+        }
+
+        .dateCell {
+          width: 205px;
+          min-width: 205px;
+          padding: 9px 10px !important;
+          background: #fff;
+          box-shadow: 5px 0 10px rgba(24,32,51,.025);
+        }
+
+        .dateTop strong {
+          font-size: 14px;
+        }
+
+        .availableCount {
+          padding: 2px 6px;
+          border-radius: 999px;
+          background: #edf9f1;
+          color: #18723a;
+          font-size: 9px;
+        }
+
+        .requiredCount {
+          margin-top: 5px;
+          color: #b45b16;
+          font-size: 10px;
+        }
+
+        .eventMini {
+          margin-top: 5px;
+          padding: 5px 7px;
+          border-left: 3px solid #7897ff;
+          border-radius: 5px;
+          background: #f0f4ff;
+          color: #34415b;
+          line-height: 1.25;
+        }
+
+        .teamGroupHead {
+          height: 32px;
+          font-size: 11px;
+          border-bottom-color: rgba(70,80,100,.35) !important;
+        }
+
+        .personHeaderRow th {
+          top: 32px;
+        }
+
+        .personHead,
+        .shiftCell {
+          width: 86px;
+          min-width: 86px;
+          max-width: 86px;
+        }
+
+        .personHead {
+          padding: 7px 3px !important;
+        }
+
+        .personName {
+          font-size: 10px;
+          line-height: 1.25;
+        }
+
+        .personMeta {
+          margin-top: 3px;
+          font-size: 8px;
+          opacity: .78;
+        }
+
+        .teamStart {
+          border-left: 3px solid #778196 !important;
+        }
+
+        .cellButton {
+          display: flex;
+          min-height: 62px;
+          flex-direction: column;
+          align-items: stretch;
+          justify-content: center;
+          gap: 3px;
+          padding: 6px 5px;
+          border: 1px solid transparent;
+          border-radius: 9px;
+          font-size: 14px;
+          line-height: 1.1;
+          transition: transform .1s ease, box-shadow .1s ease;
+        }
+
+        .cellButton:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 10px rgba(24,32,51,.08);
+        }
+
+        .statusAll { background: #e7f8ed; border-color: #d2f0dc; }
+        .statusTime { background: #eaf2ff; border-color: #d8e6ff; }
+        .statusUndecided { background: #fff4cf; border-color: #f6e8b3; }
+        .statusOff { background: #ffe8e8; border-color: #f8d6d6; }
+        .statusNone { background: #f4f5f7; border-color: #eaecf0; }
+
+        .assignedEventLabel {
+          margin-top: 2px;
+          padding: 4px 3px;
+          border-radius: 5px;
+          background: rgba(255,255,255,.72);
+          color: #3157b8;
+          font-size: 8px;
+          line-height: 1.25;
+        }
+
+        .assignedEventLabel.noAssignedEvent {
+          background: rgba(255,255,255,.45);
+          color: #9aa2af;
+        }
+
+        .negotiatedMark {
+          margin-top: 1px;
+          color: #555f70;
+        }
+
+        /* 現場管理 */
+        .eventLayout {
+          grid-template-columns: 280px minmax(0, 1fr);
+          gap: 18px;
+          align-items: start;
+        }
+
+        .eventList {
+          position: sticky;
+          top: 70px;
+          max-height: calc(100vh - 105px);
+          overflow: auto;
+          padding-right: 2px;
+        }
+
+        .eventList button {
+          margin-bottom: 7px;
+          padding: 11px 12px;
+          border-color: var(--line);
+          border-radius: 10px;
+          transition: .15s ease;
+        }
+
+        .eventList button:hover {
+          border-color: #b9c6e8;
+          background: #f8faff;
+        }
+
+        .eventList button.selected {
+          border-color: #6f8cff;
+          background: #edf3ff;
+          box-shadow: inset 3px 0 0 #315efb;
+        }
+
+        .editForm {
+          grid-template-columns: 145px minmax(220px, 1fr) minmax(220px, 1fr) auto;
+          gap: 9px;
+        }
+
+        .slot {
+          padding: 14px;
+          border-color: var(--line);
+          border-radius: 13px;
+          background: #fbfcfe;
+        }
+
+        .slotEdit {
+          grid-template-columns: 130px 105px 95px minmax(90px, auto);
+          gap: 8px;
+        }
+
+        .candidateGrid {
+          grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+          gap: 8px;
+        }
+
+        .candidate {
+          min-height: 64px;
+          border-color: #e0e4eb;
+          border-radius: 10px;
+          padding: 10px;
+          transition: .12s ease;
+        }
+
+        .candidate:hover {
+          border-color: #aebde2;
+          box-shadow: 0 3px 10px rgba(24,32,51,.06);
+        }
+
+        .candidate.assigned {
+          background: #eaf8ee;
+          border-color: #8ed3a3;
+          box-shadow: inset 3px 0 0 #34a45b;
+        }
+
+        .positionSelect {
+          min-height: 30px;
+          margin-top: 7px;
+          border-radius: 7px;
+        }
+
+        .modal {
+          border: 1px solid rgba(255,255,255,.6);
+          border-radius: 18px;
+          padding: 20px;
+          box-shadow: 0 24px 70px rgba(17,24,39,.24);
+        }
+
+        .modalBack {
+          background: rgba(15,23,42,.54);
+          backdrop-filter: blur(2px);
+        }
+
+        .staffCard,
+        .adminCard {
+          border-color: var(--line);
+          border-radius: 12px;
+          padding: 13px;
+          box-shadow: 0 3px 12px rgba(24,32,51,.035);
+        }
+
+        .offChip {
+          padding: 7px 10px;
+          background: #f1f3f6;
+          color: #394255;
+        }
+
+
         @media (max-width: 900px) {
           .content {
             padding: 9px;
