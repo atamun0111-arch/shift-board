@@ -367,7 +367,10 @@ export default function Home() {
           .from("availability")
           .select("*")
           .gte("work_date", firstDate)
-          .lte("work_date", lastDate),
+          .lte("work_date", lastDate)
+          .order("work_date")
+          .order("staff_id")
+          .range(0, 999),
 
         supabase
           .from("events")
@@ -421,7 +424,34 @@ export default function Home() {
       const staffRows = staffResult.data || [];
       const teamRows = teamResult.data || [];
       const adminRows = adminResult.data || [];
-      const availabilityRows = availabilityResult.data || [];
+      // Supabase/PostgREST は1回の取得件数に上限があるため、
+      // 1000件を超える月間シフトも全件取得する。
+      let availabilityRows = availabilityResult.data || [];
+
+      if (availabilityRows.length === 1000) {
+        let from = 1000;
+        const pageSize = 1000;
+
+        while (true) {
+          const { data: moreRows, error: moreError } = await supabase
+            .from("availability")
+            .select("*")
+            .gte("work_date", firstDate)
+            .lte("work_date", lastDate)
+            .order("work_date")
+            .order("staff_id")
+            .range(from, from + pageSize - 1);
+
+          if (moreError) throw moreError;
+
+          const pageRows = moreRows || [];
+          availabilityRows = [...availabilityRows, ...pageRows];
+
+          if (pageRows.length < pageSize) break;
+          from += pageSize;
+        }
+      }
+
       const eventRows = eventResult.data || [];
 
       setStaff(staffRows);
