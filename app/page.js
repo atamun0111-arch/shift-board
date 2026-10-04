@@ -1,174 +1,108 @@
-"use client";
+“use client”;
 
-import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { useEffect, useMemo, useState } from “react”; import {
+createClient } from “@supabase/supabase-js”;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-);
+const supabase = createClient( process.env.NEXT_PUBLIC_SUPABASE_URL,
+process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY );
 
-const DEFAULT_SECTIONS = [
-  "整理",
-  "案内",
-  "ケータ",
-  "通し",
-  "搬入",
-  "搬出",
-  "楽屋口",
-  "ランナー",
-];
+const DEFAULT_SECTIONS = [ “整理”, “案内”, “ケータ”, “通し”, “搬入”,
+“搬出”, “楽屋口”, “ランナー”,];
 
-const TEMP_TIME = "仮";
+const TEMP_TIME = “仮”;
 
-const POSITIONS = [
-  "メンツ組",
-  "入口管理",
-  "場外管理",
-  "物販管理",
-  "呼び出し",
-  "場内管理",
-];
+const POSITIONS = [ “メンツ組”, “入口管理”, “場外管理”, “物販管理”,
+“呼び出し”, “場内管理”,];
 
-const HOURS = Array.from(
-  { length: 24 },
-  (_, i) => `${String(i).padStart(2, "0")}:00`
-);
+const HOURS = Array.from({ length: 48 }, (_, i) => { const hour =
+Math.floor(i / 2); const minute = i % 2 === 0 ? “00” : “30”; return
+${String(hour).padStart(2, "0")}:${minute}; });
 
-const emptyShift = {
-  status: "none",
-  startHour: "",
-  negotiated: false,
-  negotiatedBy: "",
-};
+const emptyShift = { status: “none”, startHour: ““, negotiated: false,
+negotiatedBy:”“, };
 
-function shortTime(value) {
-  if (!value) return "";
-  return String(value).slice(0, 5);
-}
+function shortTime(value) { if (!value) return ““; return
+String(value).slice(0, 5); }
 
-function availabilityLabel(shift) {
-  if (!shift || shift.status === "none") return "未提出";
-  if (shift.status === "all") return "終日勤務可能";
-  if (shift.status === "time") {
-    return `${shift.startHour || "時間未設定"}〜`;
-  }
-  if (shift.status === "undecided") return "未定";
-  if (shift.status === "off") return "勤務不可";
-  return "未提出";
-}
+function availabilityLabel(shift) { if (!shift || shift.status ===
+“none”) return “未提出”; if (shift.status === “all”) return
+“終日勤務可能”; if (shift.status === “time”) { return
+${shift.startHour || "時間未設定"}〜; } if (shift.status ===
+“undecided”) return “未定”; if (shift.status === “off”) return
+“勤務不可”; return “未提出”; }
 
-function compactLabel(shift) {
-  if (!shift || shift.status === "none") return "—";
-  if (shift.status === "all") return "⭕️";
+function compactLabel(shift) { if (!shift || shift.status === “none”)
+return “—”; if (shift.status === “all”) return “⭕️”;
 
-  if (shift.status === "time") {
-    return `${(shift.startHour || "--:--").slice(0, 2)}時〜`;
-  }
+if (shift.status === “time”) { return
+${(shift.startHour || "--:--").slice(0, 2)}時〜; }
 
-  if (shift.status === "undecided") return "🔺";
-  if (shift.status === "off") return "❌";
+if (shift.status === “undecided”) return “🔺”; if (shift.status ===
+“off”) return “❌”;
 
-  return "—";
-}
+return “—”; }
 
-function statusClass(status) {
-  return (
-    {
-      all: "statusAll",
-      time: "statusTime",
-      undecided: "statusUndecided",
-      off: "statusOff",
-      none: "statusNone",
-    }[status || "none"] || "statusNone"
-  );
-}
+function statusClass(status) { return ( { all: “statusAll”, time:
+“statusTime”, undecided: “statusUndecided”, off: “statusOff”, none:
+“statusNone”, }[status || “none”] || “statusNone” ); }
 
-function lastDayOfMonth(month) {
-  const [y, m] = month.split("-").map(Number);
+function lastDayOfMonth(month) { const [y, m] =
+month.split(“-”).map(Number);
 
-  const d = new Date(y, m, 0).getDate();
+const d = new Date(y, m, 0).getDate();
 
-  return `${month}-${String(d).padStart(2, "0")}`;
-}
+return ${month}-${String(d).padStart(2, "0")}; }
 
-export default function Home() {
-  const [session, setSession] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
+export default function Home() { const [session, setSession] =
+useState(null); const [authChecked, setAuthChecked] = useState(false);
 
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loggingIn, setLoggingIn] = useState(false);
+const [loginEmail, setLoginEmail] = useState(““); const [loginPassword,
+setLoginPassword] = useState(”“); const [loginError, setLoginError] =
+useState(”“); const [loggingIn, setLoggingIn] = useState(false);
 
-  const [tab, setTab] = useState("board");
+const [tab, setTab] = useState(“board”);
 
-  const [month, setMonth] = useState("2026-09");
+const [month, setMonth] = useState(“2026-09”);
 
-  const [staff, setStaff] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [sectionOptions, setSectionOptions] = useState([]);
-  const [newSectionName, setNewSectionName] = useState("");
-  const [admins, setAdmins] = useState([]);
-  const [shifts, setShifts] = useState({});
-  const [events, setEvents] = useState([]);
+const [staff, setStaff] = useState([]); const [teams, setTeams] =
+useState([]); const [sectionOptions, setSectionOptions] = useState([]);
+const [newSectionName, setNewSectionName] = useState(““); const [admins,
+setAdmins] = useState([]); const [shifts, setShifts] = useState({});
+const [events, setEvents] = useState([]);
 
-  const [eventFiles, setEventFiles] = useState({});
-  const [eventPdfs, setEventPdfs] = useState({});
+const [eventFiles, setEventFiles] = useState({}); const [eventPdfs,
+setEventPdfs] = useState({});
 
-  const [loading, setLoading] = useState(false);
-  const [editingCell, setEditingCell] = useState(null);
+const [loading, setLoading] = useState(false); const [editingCell,
+setEditingCell] = useState(null);
 
-  const [newStaff, setNewStaff] = useState({
-    name: "",
-    grade: "1",
-    rank: "無",
-    gender: "男性",
-    team_id: "",
-  });
+const [newStaff, setNewStaff] = useState({ name: ““, grade:”1”, rank:
+“無”, gender: “男性”, team_id: ““, });
 
-  const [editingStaffId, setEditingStaffId] = useState(null);
-  const [editingStaff, setEditingStaff] = useState({
-    name: "",
-    grade: "1",
-    rank: "無",
-    gender: "男性",
-    team_id: "",
-  });
+const [editingStaffId, setEditingStaffId] = useState(null); const
+[editingStaff, setEditingStaff] = useState({ name: ““, grade:”1”, rank:
+“無”, gender: “男性”, team_id: ““, });
 
-  const [newTeamName, setNewTeamName] = useState("");
-  const [editingTeamId, setEditingTeamId] = useState(null);
-  const [editingTeamName, setEditingTeamName] = useState("");
+const [newTeamName, setNewTeamName] = useState(““); const
+[editingTeamId, setEditingTeamId] = useState(null); const
+[editingTeamName, setEditingTeamName] = useState(”“);
 
-  const [newAdmin, setNewAdmin] = useState("");
+const [newAdmin, setNewAdmin] = useState(““);
 
-  const [shiftPeriod, setShiftPeriod] = useState({
-    submission_start: "",
-    submission_end: "",
-    is_locked: false,
-    submission_token: "",
-  });
-  const [savingShiftPeriod, setSavingShiftPeriod] = useState(false);
+const [shiftPeriod, setShiftPeriod] = useState({ submission_start: ““,
+submission_end:”“, is_locked: false, submission_token:”“, }); const
+[savingShiftPeriod, setSavingShiftPeriod] = useState(false);
 
-  const [newEvent, setNewEvent] = useState({
-    date: "2026-09-01",
-    eventName: "",
-    venueName: "",
-  });
+const [newEvent, setNewEvent] = useState({ date: “2026-09-01”,
+eventName: ““, venueName:”“, });
 
-  const [selectedEventId, setSelectedEventId] = useState("");
+const [selectedEventId, setSelectedEventId] = useState(““);
 
-  const [newSlot, setNewSlot] = useState({
-    section: "整理",
-    time: "09:00",
-    required: "1",
-  });
+const [newSlot, setNewSlot] = useState({ section: “整理”, time: “09:00”,
+required: “1”, });
 
-  useEffect(() => {
-    async function checkSession() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+useEffect(() => { async function checkSession() { const { data: {
+session }, } = await supabase.auth.getSession();
 
       setSession(session);
       setAuthChecked(true);
@@ -186,16 +120,17 @@ export default function Home() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
 
-  useEffect(() => {
-    if (!session) return;
+}, []);
+
+useEffect(() => { if (!session) return;
 
     loadData();
-  }, [session, month]);
 
-  const days = useMemo(() => {
-    const [year, monthNumber] = month.split("-").map(Number);
+}, [session, month]);
+
+const days = useMemo(() => { const [year, monthNumber] =
+month.split(“-”).map(Number);
 
     const count = new Date(year, monthNumber, 0).getDate();
 
@@ -204,10 +139,10 @@ export default function Home() {
       (_, index) =>
         `${month}-${String(index + 1).padStart(2, "0")}`
     );
-  }, [month]);
 
-  const eventsByDate = useMemo(() => {
-    const map = {};
+}, [month]);
+
+const eventsByDate = useMemo(() => { const map = {};
 
     for (const event of events) {
       if (!map[event.date]) {
@@ -218,26 +153,17 @@ export default function Home() {
     }
 
     return map;
-  }, [events]);
 
-  const selectedEvent =
-    events.find((event) => event.id === selectedEventId) || null;
+}, [events]);
 
-  const teamColors = [
-    "#dbeafe",
-    "#dcfce7",
-    "#fef3c7",
-    "#ede9fe",
-    "#fce7f3",
-    "#cffafe",
-    "#ffedd5",
-    "#e0e7ff",
-  ];
+const selectedEvent = events.find((event) => event.id ===
+selectedEventId) || null;
 
-  const boardStaff = useMemo(() => {
-    const teamIndex = new Map(
-      teams.map((team, index) => [team.id, index])
-    );
+const teamColors = [ “#dbeafe”, “#dcfce7”, “#fef3c7”, “#ede9fe”,
+“#fce7f3”, “#cffafe”, “#ffedd5”, “#e0e7ff”, ];
+
+const boardStaff = useMemo(() => { const teamIndex = new Map(
+teams.map((team, index) => [team.id, index]) );
 
     return [...staff].sort((a, b) => {
       const aIndex = a.team_id
@@ -251,10 +177,10 @@ export default function Home() {
 
       return a.name.localeCompare(b.name, "ja");
     });
-  }, [staff, teams]);
 
-  const boardTeamGroups = useMemo(() => {
-    const groups = [];
+}, [staff, teams]);
+
+const boardTeamGroups = useMemo(() => { const groups = [];
 
     for (const person of boardStaff) {
       const teamId = person.team_id || "__unassigned__";
@@ -282,17 +208,14 @@ export default function Home() {
     }
 
     return groups;
-  }, [boardStaff, teams]);
 
-  const submissionStatus = useMemo(() => {
-    const submittedIds = new Set();
+}, [boardStaff, teams]);
+
+const submissionStatus = useMemo(() => { const submittedIds = new Set();
 
     for (const person of staff) {
       const hasSubmittedValue = days.some((date) => {
         const shift = shifts[`${person.id}|${date}`];
-
-        // 行が存在するだけでは提出済みにしない。
-        // 月内に1日でも「未提出(none)以外」の回答があれば提出済み。
         return !!shift && shift.status && shift.status !== "none";
       });
 
@@ -305,32 +228,44 @@ export default function Home() {
       submitted: staff.filter((p) => submittedIds.has(p.id)),
       unsubmitted: staff.filter((p) => !submittedIds.has(p.id)),
     };
-  }, [staff, days, shifts]);
 
-  function copyUnsubmittedStaff() {
-    if (!submissionStatus.unsubmitted.length) return alert("未提出者はいません！");
-    const message = ["【シフト未提出者】", ...submissionStatus.unsubmitted.map((p) => `・${p.name}`), "", `${month.replace("-", "年")}月分のシフト未提出の方は提出をお願いします！`].join("\n");
-    navigator.clipboard.writeText(message).then(() => alert("未提出者リストをコピーしました！")).catch(() => window.prompt("この文章をコピーしてください", message));
-  }
+}, [staff, days, shifts]);
 
-  function getTeamColor(teamId) {
-    if (!teamId) return "#e5e7eb";
+function copyUnsubmittedStaff() { if
+(!submissionStatus.unsubmitted.length) { return
+alert(“未提出者はいません！”); }
+
+    const message = [
+      "【シフト未提出者】",
+      ...submissionStatus.unsubmitted.map((p) => `・${p.name}`),
+      "",
+      `${month.replace("-", "年")}月分のシフト未提出の方は提出をお願いします！`,
+    ].join("\n");
+
+    navigator.clipboard
+      .writeText(message)
+      .then(() => alert("未提出者リストをコピーしました！"))
+      .catch(() => window.prompt("この文章をコピーしてください", message));
+
+}
+
+function getTeamColor(teamId) { if (!teamId) return “#e5e7eb”;
 
     const index = teams.findIndex((team) => team.id === teamId);
 
     if (index < 0) return "#e5e7eb";
 
     return teamColors[index % teamColors.length];
-  }
 
-  useEffect(() => {
-    if (!selectedEventId) return;
+}
+
+useEffect(() => { if (!selectedEventId) return;
 
     loadEventPdf(selectedEventId);
-  }, [selectedEventId, eventFiles]);
 
-  async function login(e) {
-    e.preventDefault();
+}, [selectedEventId, eventFiles]);
+
+async function login(e) { e.preventDefault();
 
     setLoggingIn(true);
     setLoginError("");
@@ -345,20 +280,20 @@ export default function Home() {
     if (error) {
       setLoginError("メールアドレスまたはパスワードが違います。");
     }
-  }
 
-  async function logout() {
-    await supabase.auth.signOut();
+}
+
+async function logout() { await supabase.auth.signOut();
 
     setStaff([]);
     setTeams([]);
     setAdmins([]);
     setShifts({});
     setEvents([]);
-  }
 
-  async function loadData() {
-    setLoading(true);
+}
+
+async function loadData() { setLoading(true);
 
     try {
       const firstDate = `${month}-01`;
@@ -391,36 +326,11 @@ export default function Home() {
           .eq("is_active", true)
           .order("name"),
 
-        (async () => {
-          // Supabase は1回の取得件数に上限があるため、
-          // 月内のシフト回答を1000件ずつ最後まで取得する。
-          const allRows = [];
-          const pageSize = 1000;
-
-          for (let from = 0; ; from += pageSize) {
-            const { data, error } = await supabase
-              .from("availability")
-              .select("*")
-              .gte("work_date", firstDate)
-              .lte("work_date", lastDate)
-              .order("work_date", { ascending: true })
-              .order("staff_id", { ascending: true })
-              .range(from, from + pageSize - 1);
-
-            if (error) {
-              return { data: null, error };
-            }
-
-            const rows = data || [];
-            allRows.push(...rows);
-
-            if (rows.length < pageSize) {
-              break;
-            }
-          }
-
-          return { data: allRows, error: null };
-        })(),
+        supabase
+          .from("availability")
+          .select("*")
+          .gte("work_date", firstDate)
+          .lte("work_date", lastDate),
 
         supabase
           .from("events")
@@ -593,13 +503,12 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }
 
-  async function saveShiftPeriod() {
-    if (!shiftPeriod.submission_start || !shiftPeriod.submission_end) {
-      alert("提出開始日と提出締切日を入力してください。");
-      return;
-    }
+}
+
+async function saveShiftPeriod() { if (!shiftPeriod.submission_start ||
+!shiftPeriod.submission_end) {
+alert(“提出開始日と提出締切日を入力してください。”); return; }
 
     if (shiftPeriod.submission_start > shiftPeriod.submission_end) {
       alert("提出締切日は提出開始日以降にしてください。");
@@ -637,13 +546,12 @@ export default function Home() {
     });
 
     alert("シフト募集設定を保存しました！");
-  }
 
-  async function copyStaffSubmissionUrl() {
-    if (!shiftPeriod.submission_token) {
-      alert("先に「設定を保存」を押してください。");
-      return;
-    }
+}
+
+async function copyStaffSubmissionUrl() { if
+(!shiftPeriod.submission_token) {
+alert(“先に「設定を保存」を押してください。”); return; }
 
     const url = `${window.location.origin}/staff?token=${shiftPeriod.submission_token}`;
 
@@ -653,10 +561,11 @@ export default function Home() {
     } catch {
       window.prompt("このURLをコピーしてください", url);
     }
-  }
 
-  async function setShift(staffId, date, patch) {
-    const key = `${staffId}|${date}`;
+}
+
+async function setShift(staffId, date, patch) { const key =
+${staffId}|${date};
 
     const current = shifts[key] || emptyShift;
 
@@ -714,13 +623,11 @@ export default function Home() {
         changed_by: session?.user?.id || null,
       });
     }
-  }
 
-  async function addStaff() {
-    if (!newStaff.name.trim()) {
-      alert("名前を入力してください");
-      return;
-    }
+}
+
+async function addStaff() { if (!newStaff.name.trim()) {
+alert(“名前を入力してください”); return; }
 
     const { data, error } = await supabase
       .from("staff")
@@ -754,35 +661,19 @@ export default function Home() {
       gender: "男性",
       team_id: "",
     });
-  }
 
-  function startEditStaff(person) {
-    setEditingStaffId(person.id);
-    setEditingStaff({
-      name: person.name || "",
-      grade: person.grade || "1",
-      rank: person.rank || "無",
-      gender: person.gender || "男性",
-      team_id: person.team_id || "",
-    });
-  }
+}
 
-  function cancelEditStaff() {
-    setEditingStaffId(null);
-    setEditingStaff({
-      name: "",
-      grade: "1",
-      rank: "無",
-      gender: "男性",
-      team_id: "",
-    });
-  }
+function startEditStaff(person) { setEditingStaffId(person.id);
+setEditingStaff({ name: person.name || ““, grade: person.grade ||”1”,
+rank: person.rank || “無”, gender: person.gender || “男性”, team_id:
+person.team_id || ““, }); }
 
-  async function saveStaff(personId) {
-    if (!editingStaff.name.trim()) {
-      alert("名前を入力してください");
-      return;
-    }
+function cancelEditStaff() { setEditingStaffId(null); setEditingStaff({
+name: ““, grade:”1”, rank: “無”, gender: “男性”, team_id: ““, }); }
+
+async function saveStaff(personId) { if (!editingStaff.name.trim()) {
+alert(“名前を入力してください”); return; }
 
     const { data, error } = await supabase
       .from("staff")
@@ -810,10 +701,10 @@ export default function Home() {
     );
 
     cancelEditStaff();
-  }
 
-  async function addTeam() {
-    const name = newTeamName.trim();
+}
+
+async function addTeam() { const name = newTeamName.trim();
 
     if (!name) {
       alert("チーム名を入力してください");
@@ -839,20 +730,16 @@ export default function Home() {
       [...prev, data].sort((a, b) => a.name.localeCompare(b.name, "ja"))
     );
     setNewTeamName("");
-  }
 
-  function startEditTeam(team) {
-    setEditingTeamId(team.id);
-    setEditingTeamName(team.name);
-  }
+}
 
-  function cancelEditTeam() {
-    setEditingTeamId(null);
-    setEditingTeamName("");
-  }
+function startEditTeam(team) { setEditingTeamId(team.id);
+setEditingTeamName(team.name); }
 
-  async function saveTeam(teamId) {
-    const name = editingTeamName.trim();
+function cancelEditTeam() { setEditingTeamId(null);
+setEditingTeamName(““); }
+
+async function saveTeam(teamId) { const name = editingTeamName.trim();
 
     if (!name) {
       alert("チーム名を入力してください");
@@ -878,10 +765,11 @@ export default function Home() {
         .sort((a, b) => a.name.localeCompare(b.name, "ja"))
     );
     cancelEditTeam();
-  }
 
-  async function deleteTeam(team) {
-    const hasMembers = staff.some((person) => person.team_id === team.id);
+}
+
+async function deleteTeam(team) { const hasMembers = staff.some((person)
+=> person.team_id === team.id);
 
     if (hasMembers) {
       alert("このチームには所属スタッフがいます。先にスタッフの所属チームを変更してください。");
@@ -904,12 +792,11 @@ export default function Home() {
     }
 
     setTeams((prev) => prev.filter((item) => item.id !== team.id));
-  }
 
-  async function deleteStaff(person) {
-    if (!confirm(`${person.name}を名簿から外しますか？`)) {
-      return;
-    }
+}
+
+async function deleteStaff(person) { if
+(!confirm(${person.name}を名簿から外しますか？)) { return; }
 
     const { error } = await supabase
       .from("staff")
@@ -926,13 +813,11 @@ export default function Home() {
     setStaff((prev) =>
       prev.filter((item) => item.id !== person.id)
     );
-  }
 
-  async function addAdmin() {
-    if (!newAdmin.trim()) {
-      alert("管理者名を入力してください");
-      return;
-    }
+}
+
+async function addAdmin() { if (!newAdmin.trim()) {
+alert(“管理者名を入力してください”); return; }
 
     const { data, error } = await supabase
       .from("admins")
@@ -956,13 +841,11 @@ export default function Home() {
     );
 
     setNewAdmin("");
-  }
 
-  async function deleteAdmin(admin) {
-    if (admin.id === session?.user?.id) {
-      alert("現在ログイン中の管理者は削除できません。");
-      return;
-    }
+}
+
+async function deleteAdmin(admin) { if (admin.id === session?.user?.id)
+{ alert(“現在ログイン中の管理者は削除できません。”); return; }
 
     if (!confirm(`${admin.name}を管理者名簿から削除しますか？`)) {
       return;
@@ -983,17 +866,12 @@ export default function Home() {
     setAdmins((prev) =>
       prev.filter((item) => item.id !== admin.id)
     );
-  }
 
-  async function addEvent() {
-    if (
-      !newEvent.date ||
-      !newEvent.eventName.trim() ||
-      !newEvent.venueName.trim()
-    ) {
-      alert("日付・現場名・会場名を入力してください");
-      return;
-    }
+}
+
+async function addEvent() { if ( !newEvent.date ||
+!newEvent.eventName.trim() || !newEvent.venueName.trim() ) {
+alert(“日付・現場名・会場名を入力してください”); return; }
 
     const { data, error } = await supabase
       .from("events")
@@ -1031,15 +909,12 @@ export default function Home() {
       eventName: "",
       venueName: "",
     }));
-  }
 
-  async function updateEventField(eventId, field, value) {
-    const databaseField =
-      field === "date"
-        ? "event_date"
-        : field === "eventName"
-        ? "event_name"
-        : "venue_name";
+}
+
+async function updateEventField(eventId, field, value) { const
+databaseField = field === “date” ? “event_date” : field === “eventName”
+? “event_name” : “venue_name”;
 
     const { error } = await supabase
       .from("events")
@@ -1063,12 +938,11 @@ export default function Home() {
           : event
       )
     );
-  }
 
-  async function deleteEvent(eventId) {
-    if (!confirm("この現場を削除しますか？")) {
-      return;
-    }
+}
+
+async function deleteEvent(eventId) { if
+(!confirm(“この現場を削除しますか？”)) { return; }
 
     await removeEventPdf(eventId, false);
 
@@ -1091,10 +965,10 @@ export default function Home() {
 
       return next;
     });
-  }
 
-  async function addSectionOption() {
-    const name = newSectionName.trim();
+}
+
+async function addSectionOption() { const name = newSectionName.trim();
 
     if (!name) {
       alert("セクション名を入力してください。");
@@ -1112,30 +986,78 @@ export default function Home() {
         -1
       ) + 1;
 
-    const { data, error } = await supabase
+    // sections.name は unique のため、
+    // 過去に削除（is_active=false）した同名セクションが残っている場合は
+    // INSERT ではなく復活させる。
+    const { data: existing, error: findError } = await supabase
       .from("sections")
-      .insert({
-        name,
-        is_active: true,
-        display_order: nextOrder,
-      })
-      .select()
-      .single();
+      .select("*")
+      .eq("name", name)
+      .maybeSingle();
 
-    if (error) {
-      console.error(error);
-      alert("セクションの追加に失敗しました。");
+    if (findError) {
+      console.error(findError);
+      alert("セクションの確認に失敗しました。");
       return;
     }
 
-    setSectionOptions((prev) => [...prev, data]);
-    setNewSectionName("");
-  }
+    let data;
+    let error;
 
-  async function deleteSectionOption(section) {
-    const used = events.some((event) =>
-      (event.slots || []).some((slot) => slot.section === section.name)
+    if (existing) {
+      const result = await supabase
+        .from("sections")
+        .update({
+          is_active: true,
+          display_order: nextOrder,
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+
+      data = result.data;
+      error = result.error;
+    } else {
+      const result = await supabase
+        .from("sections")
+        .insert({
+          name,
+          is_active: true,
+          display_order: nextOrder,
+        })
+        .select()
+        .single();
+
+      data = result.data;
+      error = result.error;
+    }
+
+    if (error) {
+      console.error(error);
+      alert(`セクションの追加に失敗しました。\n${error.message || ""}`);
+      return;
+    }
+
+    setSectionOptions((prev) =>
+      [...prev, data].sort(
+        (a, b) =>
+          Number(a.display_order || 0) - Number(b.display_order || 0) ||
+          a.name.localeCompare(b.name, "ja")
+      )
     );
+
+    setNewSectionName("");
+
+    setNewSlot((prev) => ({
+      ...prev,
+      section: prev.section || data.name,
+    }));
+
+}
+
+async function deleteSectionOption(section) { const used =
+events.some((event) => (event.slots || []).some((slot) => slot.section
+=== section.name) );
 
     const message = used
       ? `「${section.name}」は現在の現場で使用中です。\n設定一覧から非表示にしますが、既存の現場データは残ります。続けますか？`
@@ -1166,13 +1088,11 @@ export default function Home() {
           sectionOptions.find((item) => item.id !== section.id)?.name || "",
       };
     });
-  }
 
-  async function addSlot() {
-    if (!selectedEvent) {
-      alert("先に現場を選択してください");
-      return;
-    }
+}
+
+async function addSlot() { if (!selectedEvent) {
+alert(“先に現場を選択してください”); return; }
 
     const required = Number(newSlot.required);
 
@@ -1220,10 +1140,10 @@ export default function Home() {
           : event
       )
     );
-  }
 
-  async function updateSlot(eventId, slotId, patch) {
-    const update = {};
+}
+
+async function updateSlot(eventId, slotId, patch) { const update = {};
 
     if ("section" in patch) {
       update.section = patch.section;
@@ -1271,12 +1191,11 @@ export default function Home() {
           : event
       )
     );
-  }
 
-  async function deleteSlot(eventId, slotId) {
-    if (!confirm("この時間・セクションを削除しますか？")) {
-      return;
-    }
+}
+
+async function deleteSlot(eventId, slotId) { if
+(!confirm(“この時間・セクションを削除しますか？”)) { return; }
 
     const { error } = await supabase
       .from("event_slots")
@@ -1300,21 +1219,13 @@ export default function Home() {
           : event
       )
     );
-  }
 
-  async function updateStaffPosition(
-    eventId,
-    slotId,
-    staffId,
-    position
-  ) {
-    const { error } = await supabase
-      .from("assignments")
-      .update({
-        position: position || null,
-      })
-      .eq("slot_id", slotId)
-      .eq("staff_id", staffId);
+}
+
+async function updateStaffPosition( eventId, slotId, staffId, position )
+{ const { error } = await supabase .from(“assignments”) .update({
+position: position || null, }) .eq(“slot_id”, slotId) .eq(“staff_id”,
+staffId);
 
     if (error) {
       alert("ポジションの保存に失敗しました。");
@@ -1343,11 +1254,11 @@ export default function Home() {
         };
       })
     );
-  }
 
-  function canWork(staffId, date, time) {
-    const shift =
-      shifts[`${staffId}|${date}`] || emptyShift;
+}
+
+function canWork(staffId, date, time) { const shift =
+shifts[${staffId}|${date}] || emptyShift;
 
     if (shift.status === "all") {
       return true;
@@ -1365,21 +1276,21 @@ export default function Home() {
     }
 
     return false;
-  }
 
-  function canWorkOnDate(staffId, date) {
-    const shift =
-      shifts[`${staffId}|${date}`] || emptyShift;
+}
+
+function canWorkOnDate(staffId, date) { const shift =
+shifts[${staffId}|${date}] || emptyShift;
 
     return (
       shift.status === "all" ||
       shift.status === "time"
     );
-  }
 
-  function getStaffAssignmentOnDate(staffId, date) {
-    for (const event of events) {
-      if (event.date !== date) continue;
+}
+
+function getStaffAssignmentOnDate(staffId, date) { for (const event of
+events) { if (event.date !== date) continue;
 
       for (const slot of event.slots || []) {
         if ((slot.assigned || []).includes(staffId)) {
@@ -1395,12 +1306,11 @@ export default function Home() {
     }
 
     return null;
-  }
 
-  async function toggleAssignment(eventId, slotId, staffId) {
-    const event = events.find(
-      (item) => item.id === eventId
-    );
+}
+
+async function toggleAssignment(eventId, slotId, staffId) { const event
+= events.find( (item) => item.id === eventId );
 
     if (!event) return;
 
@@ -1513,10 +1423,10 @@ export default function Home() {
         };
       })
     );
-  }
 
-  function assignedStaffIdsOnDate(date) {
-    const ids = new Set();
+}
+
+function assignedStaffIdsOnDate(date) { const ids = new Set();
 
     for (const event of events.filter(
       (event) => event.date === date
@@ -1529,10 +1439,10 @@ export default function Home() {
     }
 
     return ids;
-  }
 
-  async function handlePdfUpload(eventId, file) {
-    if (!file) return;
+}
+
+async function handlePdfUpload(eventId, file) { if (!file) return;
 
     if (file.type !== "application/pdf") {
       alert("PDFファイルを選択してください");
@@ -1608,10 +1518,10 @@ export default function Home() {
 
       alert("PDFのアップロードに失敗しました。");
     }
-  }
 
-  async function loadEventPdf(eventId) {
-    const file = eventFiles[eventId];
+}
+
+async function loadEventPdf(eventId) { const file = eventFiles[eventId];
 
     if (!file?.storage_path) {
       setEventPdfs((prev) => {
@@ -1641,15 +1551,11 @@ export default function Home() {
       ...prev,
       [eventId]: data.signedUrl,
     }));
-  }
 
-  async function removeEventPdf(eventId, ask = true) {
-    if (
-      ask &&
-      !confirm("配置表PDFを削除しますか？")
-    ) {
-      return;
-    }
+}
+
+async function removeEventPdf(eventId, ask = true) { if ( ask &&
+!confirm(“配置表PDFを削除しますか？”) ) { return; }
 
     const file = eventFiles[eventId];
 
@@ -1685,12 +1591,11 @@ export default function Home() {
 
       return next;
     });
-  }
 
-  const offRows = days
-    .map((date) => {
-      const assigned =
-        assignedStaffIdsOnDate(date);
+}
+
+const offRows = days .map((date) => { const assigned =
+assignedStaffIdsOnDate(date);
 
       return {
         date,
@@ -1704,119 +1609,23 @@ export default function Home() {
     })
     .filter((row) => row.people.length > 0);
 
-  if (!authChecked) {
-    return (
-      <div className="centerScreen">
+if (!authChecked) { return (
         読み込み中...
       </div>
     );
-  }
 
-  if (!session) {
-    return (
-      <main className="loginPage">
-        <style jsx global>{`
-          * {
-            box-sizing: border-box;
-          }
+}
 
-          body {
-            margin: 0;
-            font-family:
-              -apple-system,
-              BlinkMacSystemFont,
-              "Hiragino Sans",
-              "Yu Gothic",
-              sans-serif;
-            background: #f3f4f6;
-          }
+if (!session) { return (
+3班現場割
+管理者ログイン
+<input type=“email” placeholder=“メールアドレス” value={loginEmail}
+onChange={(e) => setLoginEmail(e.target.value) } required />
 
-          .loginPage,
-          .centerScreen {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-          }
+<input type=“password” placeholder=“パスワード” value={loginPassword}
+onChange={(e) => setLoginPassword(e.target.value) } required />
 
-          .loginBox {
-            width: 100%;
-            max-width: 420px;
-            background: white;
-            border-radius: 16px;
-            padding: 28px;
-            box-shadow:
-              0 10px 35px rgba(0, 0, 0, 0.08);
-          }
-
-          .loginBox h1 {
-            margin: 0;
-            font-size: 27px;
-          }
-
-          .loginBox p {
-            color: #6b7280;
-            margin-bottom: 22px;
-          }
-
-          .loginBox input {
-            width: 100%;
-            margin-bottom: 10px;
-            padding: 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 9px;
-            font-size: 16px;
-          }
-
-          .loginBox button {
-            width: 100%;
-            padding: 12px;
-            border: 0;
-            border-radius: 9px;
-            background: #111827;
-            color: white;
-            font-weight: 800;
-            cursor: pointer;
-          }
-
-          .loginError {
-            margin-bottom: 10px;
-            color: #b91c1c;
-            font-size: 13px;
-          }
-        `}</style>
-
-        <form
-          className="loginBox"
-          onSubmit={login}
-        >
-          <h1>3班現場割 ver1.2</h1>
-
-          <p>管理者ログイン</p>
-
-          <input
-            type="email"
-            placeholder="メールアドレス"
-            value={loginEmail}
-            onChange={(e) =>
-              setLoginEmail(e.target.value)
-            }
-            required
-          />
-
-          <input
-            type="password"
-            placeholder="パスワード"
-            value={loginPassword}
-            onChange={(e) =>
-              setLoginPassword(e.target.value)
-            }
-            required
-          />
-
-          {loginError && (
-            <div className="loginError">
+{loginError && (
               {loginError}
             </div>
           )}
@@ -1832,681 +1641,18 @@ export default function Home() {
         </form>
       </main>
     );
-  }
 
-  return (
-    <main>
-      <style jsx global>{`
-        * {
-          box-sizing: border-box;
-        }
+}
 
-        body {
-          margin: 0;
-          background: #f5f6f8;
-          color: #1f2937;
-          font-family:
-            -apple-system,
-            BlinkMacSystemFont,
-            "Hiragino Sans",
-            "Yu Gothic",
-            sans-serif;
-        }
-
-        button,
-        input,
-        select {
-          font: inherit;
-        }
-
-        button {
-          cursor: pointer;
-        }
-
-        .topbar {
-          background: #111827;
-          color: white;
-          padding: 14px 20px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .brand h1 {
-          margin: 0;
-          font-size: 21px;
-        }
-
-        .brand p {
-          margin: 3px 0 0;
-          color: #9ca3af;
-          font-size: 11px;
-        }
-
-        .topActions {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-        }
-
-        .month {
-          border: 0;
-          border-radius: 8px;
-          padding: 9px;
-          background: white;
-        }
-
-        .logout {
-          border: 1px solid #4b5563;
-          background: transparent;
-          color: white;
-          border-radius: 8px;
-          padding: 8px 10px;
-        }
-
-        .tabs {
-          position: sticky;
-          top: 0;
-          z-index: 30;
-          display: flex;
-          gap: 6px;
-          flex-wrap: wrap;
-          padding: 10px 14px;
-          background: white;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        .tab {
-          border: 0;
-          border-radius: 8px;
-          background: #eef0f3;
-          padding: 8px 12px;
-          font-weight: 700;
-        }
-
-        .tab.active {
-          background: #111827;
-          color: white;
-        }
-
-        .content {
-          max-width: 1900px;
-          margin: auto;
-          padding: 14px;
-        }
-
-        .card {
-          background: white;
-          border: 1px solid #e5e7eb;
-          border-radius: 12px;
-          padding: 15px;
-          margin-bottom: 14px;
-        }
-
-        h2,
-        h3 {
-          margin-top: 0;
-        }
-
-        .muted {
-          color: #6b7280;
-          font-size: 11px;
-        }
-
-        .primary {
-          border: 0;
-          border-radius: 8px;
-          background: #2563eb;
-          color: white;
-          padding: 9px 13px;
-          font-weight: 700;
-        }
-
-        .danger {
-          border: 0;
-          border-radius: 8px;
-          background: #fee2e2;
-          color: #b91c1c;
-          padding: 8px 11px;
-          font-weight: 700;
-        }
-
-        .formRow {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          align-items: center;
-        }
-
-        input,
-        select {
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          padding: 9px;
-          background: white;
-        }
-
-        .loadingBar {
-          position: fixed;
-          z-index: 500;
-          left: 0;
-          right: 0;
-          top: 0;
-          background: #2563eb;
-          color: white;
-          text-align: center;
-          font-size: 11px;
-          padding: 3px;
-        }
-
-        .boardWrap {
-          overflow: auto;
-          height: calc(100vh - 180px);
-          min-height: 500px;
-          border: 1px solid #dfe3e8;
-          border-radius: 10px;
-          background: white;
-        }
-
-        .shiftTable {
-          border-collapse: separate;
-          border-spacing: 0;
-          width: max-content;
-          min-width: 100%;
-        }
-
-        .shiftTable th,
-        .shiftTable td {
-          border-right: 1px solid #e5e7eb;
-          border-bottom: 1px solid #e5e7eb;
-          padding: 3px;
-          text-align: center;
-          vertical-align: middle;
-        }
-
-        .shiftTable th {
-          position: sticky;
-          top: 0;
-          z-index: 8;
-          background: #f3f4f6;
-        }
-
-        .dateHead {
-          position: sticky !important;
-          left: 0;
-          z-index: 15 !important;
-          width: 190px;
-          min-width: 190px;
-          text-align: left !important;
-        }
-
-        .dateCell {
-          position: sticky;
-          left: 0;
-          z-index: 6;
-          width: 190px;
-          min-width: 190px;
-          background: white;
-          text-align: left !important;
-          padding: 6px 8px !important;
-        }
-
-        .dateTop {
-          display: flex;
-          justify-content: space-between;
-          gap: 6px;
-        }
-
-        .availableCount {
-          font-size: 10px;
-          color: #166534;
-          font-weight: 800;
-        }
-
-        .requiredCount {
-          margin-top: 2px;
-          color: #b45309;
-          font-size: 10px;
-          font-weight: 800;
-        }
-
-        .eventMini {
-          margin-top: 4px;
-          padding: 4px;
-          border-radius: 5px;
-          background: #eff6ff;
-          font-size: 9px;
-        }
-
-        .teamGroupRow th {
-          top: 0;
-        }
-
-        .teamGroupHead {
-          height: 28px;
-          padding: 4px 6px !important;
-          font-size: 11px;
-          font-weight: 900;
-          white-space: nowrap;
-          border-bottom: 2px solid #9ca3af !important;
-        }
-
-        .teamGroupCount {
-          margin-left: 5px;
-          font-size: 9px;
-          font-weight: 700;
-          opacity: 0.65;
-        }
-
-        .personHeaderRow th {
-          top: 28px;
-        }
-
-        .personHead {
-          width: 78px;
-          min-width: 78px;
-          max-width: 78px;
-          padding: 5px 2px !important;
-        }
-
-        .teamStart {
-          border-left: 3px solid #6b7280 !important;
-        }
-
-        .personName {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          font-size: 10px;
-          line-height: 1.2;
-          word-break: break-all;
-        }
-
-        .personMeta {
-          margin-top: 2px;
-          font-size: 8px;
-          color: #6b7280;
-        }
-
-        /* チーム色は名前欄全体の背景として残し、
-           ランク属性は名前ラベルだけで区別する */
-        .rankFourPlus .personName {
-          display: inline-block;
-          max-width: 72px;
-          padding: 3px 5px;
-          border: 2px solid #d97706;
-          border-radius: 7px;
-          background: #fff7cc;
-          font-weight: 900;
-          color: #78350f;
-        }
-
-        .trainingTarget .personName {
-          display: inline-block;
-          max-width: 72px;
-          padding: 3px 5px;
-          border: 2px solid #7c3aed;
-          border-radius: 7px;
-          background: #f3e8ff;
-          font-weight: 900;
-          color: #5b21b6;
-        }
-
-        .rankFourPlus .personMeta {
-          font-weight: 800;
-          color: #92400e;
-        }
-
-        .trainingTarget .personMeta {
-          font-weight: 800;
-          color: #6d28d9;
-        }
-
-        .shiftCell {
-          width: 78px;
-          min-width: 78px;
-          max-width: 78px;
-        }
-
-        .cellButton {
-          width: 100%;
-          min-height: 36px;
-          border: 0;
-          border-radius: 6px;
-          font-weight: 800;
-          font-size: 13px;
-        }
-
-        .statusAll {
-          background: #dcfce7;
-        }
-
-        .statusTime {
-          background: #dbeafe;
-        }
-
-        .statusUndecided {
-          background: #fef3c7;
-        }
-
-        .statusOff {
-          background: #fee2e2;
-        }
-
-        .statusNone {
-          background: #f3f4f6;
-          color: #6b7280;
-        }
-
-        .negotiatedMark {
-          display: block;
-          margin-top: 1px;
-          font-size: 7px;
-          line-height: 1.1;
-          color: #374151;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .assignedEventLabel {
-          display: block;
-          margin-top: 4px;
-          padding-top: 4px;
-          border-top: 1px solid rgba(0, 0, 0, 0.12);
-          font-size: 8px;
-          line-height: 1.2;
-          font-weight: 800;
-          white-space: normal;
-          word-break: break-word;
-        }
-
-        .noAssignedEvent {
-          opacity: 0.5;
-          font-weight: 700;
-        }
-
-        .modalBack {
-          position: fixed;
-          inset: 0;
-          z-index: 100;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 18px;
-          background: rgba(17, 24, 39, 0.48);
-        }
-
-        .modal {
-          width: min(460px, 100%);
-          background: white;
-          border-radius: 14px;
-          padding: 18px;
-        }
-
-        .modalHeader {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .closeBtn {
-          border: 0;
-          border-radius: 8px;
-          background: #eef0f3;
-          padding: 7px 10px;
-        }
-
-        .modalField {
-          margin-top: 14px;
-        }
-
-        .modalField label {
-          display: block;
-          margin-bottom: 5px;
-          font-size: 12px;
-          font-weight: 800;
-        }
-
-        .modalField select {
-          width: 100%;
-        }
-
-        .negotiationBox {
-          margin-top: 16px;
-          padding: 13px;
-          border-radius: 10px;
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
-        }
-
-        .checkRow {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          font-weight: 800;
-        }
-
-        .checkRow input {
-          width: 18px;
-          height: 18px;
-        }
-
-        .eventLayout {
-          display: grid;
-          grid-template-columns: 300px minmax(0, 1fr);
-          gap: 14px;
-        }
-
-        .eventList button {
-          width: 100%;
-          margin-bottom: 7px;
-          padding: 10px;
-          text-align: left;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          background: white;
-        }
-
-        .eventList button.selected {
-          background: #eff6ff;
-          border-color: #2563eb;
-        }
-
-        .editForm {
-          display: grid;
-          grid-template-columns: 150px 1fr 1fr auto;
-          gap: 8px;
-        }
-
-        .slot {
-          border: 1px solid #e5e7eb;
-          border-radius: 10px;
-          padding: 12px;
-          margin-bottom: 10px;
-        }
-
-        .slotEdit {
-          display: grid;
-          grid-template-columns: 130px 110px 100px auto;
-          gap: 7px;
-        }
-
-        .slotStats {
-          margin-top: 8px;
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-
-        .stasenBox {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          margin-top: 10px;
-          padding: 9px 10px;
-          border-radius: 8px;
-          background: #f3f4f6;
-        }
-
-        .stasenBox input {
-          width: 85px;
-          padding: 7px;
-        }
-
-        .shortage {
-          color: #b91c1c;
-          font-weight: 800;
-        }
-
-        .ok {
-          color: #15803d;
-          font-weight: 800;
-        }
-
-        .candidateGrid {
-          display: grid;
-          grid-template-columns:
-            repeat(
-              auto-fill,
-              minmax(150px, 1fr)
-            );
-          gap: 7px;
-          margin-top: 10px;
-        }
-
-        .candidate {
-          border: 1px solid #d1d5db;
-          border-radius: 8px;
-          background: white;
-          padding: 9px;
-          text-align: left;
-        }
-
-        .candidate.assigned {
-          background: #dcfce7;
-          border-color: #86efac;
-        }
-
-        .hereText {
-          display: block;
-          margin-top: 3px;
-          font-weight: 900;
-          color: #15803d;
-        }
-
-        .positionSelect {
-          width: 100%;
-          margin-top: 6px;
-          padding: 5px 4px;
-          border: 1px solid #86efac;
-          border-radius: 6px;
-          background: white;
-          font-size: 10px;
-        }
-
-        .warningMini {
-          margin-top: 4px;
-          color: #b91c1c;
-          font-size: 9px;
-          font-weight: 800;
-        }
-
-        .pdfViewer {
-          width: 100%;
-          height: 650px;
-          margin-top: 14px;
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-          background: #f9fafb;
-        }
-
-        .staffGrid,
-        .adminGrid {
-          display: grid;
-          grid-template-columns:
-            repeat(
-              auto-fill,
-              minmax(230px, 1fr)
-            );
-          gap: 9px;
-        }
-
-        .staffCard,
-        .adminCard {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 10px;
-          padding: 11px;
-          border: 1px solid #e5e7eb;
-          border-radius: 9px;
-          background: white;
-        }
-
-        .offDate {
-          margin-bottom: 14px;
-        }
-
-        .offList {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          margin-top: 6px;
-        }
-
-        .offChip {
-          padding: 6px 9px;
-          border-radius: 999px;
-          background: #f3f4f6;
-          font-size: 11px;
-        }
-
-        @media (max-width: 900px) {
-          .content {
-            padding: 9px;
-          }
-
-          .eventLayout {
-            grid-template-columns: 1fr;
-          }
-
-          .editForm,
-          .slotEdit {
-            grid-template-columns: 1fr;
-          }
-
-          .dateHead,
-          .dateCell {
-            width: 160px;
-            min-width: 160px;
-          }
-
-          .personHead,
-          .shiftCell {
-            width: 70px;
-            min-width: 70px;
-            max-width: 70px;
-          }
-
-          .pdfViewer {
-            height: 500px;
-          }
-        }
-      `}</style>
-
-      {loading && (
-        <div className="loadingBar">
+return (
+{loading && (
           読み込み中...
         </div>
       )}
 
       <header className="topbar">
         <div className="brand">
-          <h1>3班現場割 ver1.2</h1>
+          <h1>3班現場割</h1>
 
           <p>
             イベントスタッフ シフト・配置管理
@@ -2622,8 +1768,6 @@ export default function Home() {
                               : ""
                           }`}
                           style={{
-                            // 背景は必ずチームカラー。
-                            // ランク4以上・育成対象は personName の枠/ラベル色で表現する。
                             background: getTeamColor(person.team_id),
                           }}
                         >
@@ -2636,9 +1780,7 @@ export default function Home() {
                               ? "F"
                               : `${person.grade}年`}
                             {" / "}
-                            {person.rank === "育成対象"
-                              ? "育成対象"
-                              : `R${person.rank}`}
+                            R{person.rank}
                           </div>
                         </th>
                       );
@@ -2776,18 +1918,6 @@ export default function Home() {
                                 shift.negotiatedBy
                             );
 
-                          const assignedEventNames =
-                            dateEvents
-                              .filter((event) =>
-                                (event.slots || []).some(
-                                  (slot) =>
-                                    (slot.assigned || []).includes(
-                                      person.id
-                                    )
-                                )
-                              )
-                              .map((event) => event.eventName);
-
                           return (
                             <td
                               key={person.id}
@@ -2809,18 +1939,6 @@ export default function Home() {
                                   {compactLabel(
                                     shift
                                   )}
-                                </span>
-
-                                <span
-                                  className={`assignedEventLabel ${
-                                    assignedEventNames.length === 0
-                                      ? "noAssignedEvent"
-                                      : ""
-                                  }`}
-                                >
-                                  {assignedEventNames.length > 0
-                                    ? assignedEventNames.join(" / ")
-                                    : "現場選択なし"}
                                 </span>
 
                                 {shift.negotiated && (
@@ -4343,19 +3461,74 @@ export default function Home() {
 
             <div className="card">
               <h3>提出状況</h3>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-                <div style={{ padding: "8px 12px", borderRadius: 8, background: "#dcfce7", fontWeight: 800 }}>提出済み {submissionStatus.submitted.length}人</div>
-                <div style={{ padding: "8px 12px", borderRadius: 8, background: "#fee2e2", fontWeight: 800 }}>未提出 {submissionStatus.unsubmitted.length}人</div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginBottom: 12,
+                }}
+              >
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "#dcfce7",
+                    fontWeight: 800,
+                  }}
+                >
+                  提出済み {submissionStatus.submitted.length}人
+                </div>
+
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "#fee2e2",
+                    fontWeight: 800,
+                  }}
+                >
+                  未提出 {submissionStatus.unsubmitted.length}人
+                </div>
               </div>
+
               {submissionStatus.unsubmitted.length === 0 ? (
-                <div style={{ padding: 12, borderRadius: 8, background: "#dcfce7", fontWeight: 800 }}>🎉 全員提出済みです！</div>
+                <div
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    background: "#dcfce7",
+                    fontWeight: 800,
+                  }}
+                >
+                  🎉 全員提出済みです！
+                </div>
               ) : (
                 <>
-                  <div style={{ padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fff", marginBottom: 10, lineHeight: 1.7 }}>
+                  <div
+                    style={{
+                      padding: 12,
+                      border: "1px solid #fecaca",
+                      borderRadius: 8,
+                      background: "#fff",
+                      marginBottom: 10,
+                      lineHeight: 1.7,
+                    }}
+                  >
                     <strong>【シフト未提出者】</strong>
-                    {submissionStatus.unsubmitted.map((person) => <div key={person.id}>・{person.name}</div>)}
+
+                    {submissionStatus.unsubmitted.map((person) => (
+                      <div key={person.id}>・{person.name}</div>
+                    ))}
                   </div>
-                  <button className="primary" onClick={copyUnsubmittedStaff}>LINE用に未提出者をコピー</button>
+
+                  <button
+                    className="primary"
+                    onClick={copyUnsubmittedStaff}
+                  >
+                    LINE用に未提出者をコピー
+                  </button>
                 </>
               )}
             </div>
@@ -4470,5 +3643,5 @@ export default function Home() {
         )}
       </div>
     </main>
-  );
-}
+
+); }
