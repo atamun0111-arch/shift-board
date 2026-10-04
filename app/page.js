@@ -1783,7 +1783,7 @@ export default function Home() {
           className="loginBox"
           onSubmit={login}
         >
-          <h1>3班現場割</h1>
+          <h1>3班現場割 ver1.3</h1>
 
           <p>管理者ログイン</p>
 
@@ -2577,8 +2577,10 @@ export default function Home() {
 
         /* 月間シフト：情報の優先順位を整理 */
         .boardWrap {
-          height: calc(100vh - 205px);
-          min-height: 540px;
+          height: auto;
+          min-height: 0;
+          overflow-x: auto;
+          overflow-y: visible;
           border: 1px solid #dfe4ec;
           border-radius: 14px;
           box-shadow: var(--shadow);
@@ -2866,7 +2868,7 @@ export default function Home() {
 
       <header className="topbar">
         <div className="brand">
-          <h1>3班現場割</h1>
+          <h1>3班現場割 ver1.3</h1>
 
           <p>
             イベントスタッフ シフト・配置管理
